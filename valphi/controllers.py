@@ -47,7 +47,7 @@ eval(neg(A),  max_value-V1) :- concept(neg(A)),   eval(A,V1).
 % find the largest truth degree for the left-hand-side concept of query 
 :~ query(C,_,_), eval(C,V). [-1@V+2, C,V]
 
-% verify if there is a counter-example for the right-hand-side concept of the query
+% verify if there is a counterexample for the right-hand-side concept of the query
 :~ query(_,D,Alpha), eval(D,V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
 
 #show.
