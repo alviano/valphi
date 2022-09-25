@@ -17,6 +17,8 @@ class NetworkTopology:
             lines = [x.strip() for x in s]
         res = NetworkTopology().add_layer()
         for line in lines:
+            if not line:
+                continue
             if line == '#':
                 res.add_layer()
                 continue
