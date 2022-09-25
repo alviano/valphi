@@ -85,9 +85,12 @@ class ValPhiPropagator(Propagator):
         if output_value is None:
             return
         if self.output_value is None:
-            unit = self.output_value_to_node_lit[output_value]
-            if ctl.add_clause([-lit for lit in self.trail] + [unit]):
-                ctl.propagate()
+            if output_value in self.output_value_to_node_lit:
+                unit = self.output_value_to_node_lit[output_value]
+                if ctl.add_clause([-lit for lit in self.trail] + [unit]):
+                    ctl.propagate()
+            else:
+                ctl.add_clause([-lit for lit in self.trail])
             return
         if output_value != self.output_value:
             ctl.add_clause([-lit for lit in self.trail])

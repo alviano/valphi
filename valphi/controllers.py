@@ -87,6 +87,7 @@ class Controller:
         return len(self.val_phi)
 
     def __setup_control(self, query: Optional[str] = None):
+        # control = clingo.Control(["--opt-strategy=usc,k,4", "--opt-usc-shrink=rgs"] if query else [])
         control = clingo.Control()
         control.configuration.solve.models = self.max_stable_models if query is None else 0
         control.add("base", ["max_value"], BASE_PROGRAM + '\n'.join(self.network_topology_as_facts(self.network))
