@@ -1,5 +1,5 @@
 import dataclasses
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Union, Any, Set
 
 from valphi import utils
 
@@ -79,3 +79,54 @@ class NetworkTopology:
     def nodes_in_exactly_one(self, index: int) -> List[int]:
         utils.validate("index", index, min_value=0, max_value=len(self.__exactly_one) - 1)
         return list(self.__exactly_one[index])
+
+
+@dataclasses.dataclass(frozen=True)
+class ArgumentationGraph:
+    __attacks: Set[Tuple[Any, Any, float]] = dataclasses.field(default_factory=set, init=False)
+
+    @staticmethod
+    def parse(s: Union[str, List[str]]) -> Optional['ArgumentationGraph']:
+        if type(s) == str:
+            lines = [x.strip() for x in s.strip().split('\n')]
+        else:
+            lines = [x.strip() for x in s]
+        res = ArgumentationGraph()
+        state = "init"
+        for line in lines:
+            if not line:
+                continue
+            if state == "init":
+                if line != "#graph":
+                    return None
+                state = "attacks"
+                continue
+            if state == "attacks":
+                attacker, attacked, weight = line.split()
+                res.add_attack(attacker, attacked, float(weight))
+        return res
+
+    def add_attack(self, attacker, attacked, weight):
+        self.__attacks.add((attacker, attacked, weight))
+
+    def __iter__(self):
+        return iter(self.__attacks)
+
+    # def compute_attacks_received_by_each_argument(self) -> Dict[Any, List[Tuple[Any, float]]]:
+    #     res = defaultdict(list)
+    #     for (attacker, attacked, weight) in self:
+    #         res[attacked].append((attacker, weight))
+    #     return res
+
+    def compute_attacked(self) -> Set[Any]:
+        return set(attacked for (attacker, attacked, weight) in self)
+
+    def compute_arguments(self) -> Set[Any]:
+        return set(attacker for (attacker, attacked, weight) in self).union(self.compute_attacked())
+
+    def number_of_layers(self) -> int:
+        return len(self.compute_arguments())
+
+    @staticmethod
+    def number_of_nodes(layer: int) -> int:
+        return 1

@@ -7,7 +7,7 @@ from rich.table import Table
 
 from valphi import utils
 from valphi.controllers import Controller
-from valphi.networks import NetworkTopology
+from valphi.networks import NetworkTopology, ArgumentationGraph
 from valphi.utils import console
 
 
@@ -71,6 +71,8 @@ def main(
 ):
     """
     Neural Network evaluation under fuzzy semantics.
+
+    Use --help after a command for the list of arguments and options of that command.
     """
     global app_options
 
@@ -94,7 +96,10 @@ def main(
             lines += f.readlines()
 
     with open(network_filename) as f:
-        network = NetworkTopology.parse(f.readlines())
+        network_filename_lines = f.readlines()
+        network = ArgumentationGraph.parse(network_filename_lines)
+        if network is None:
+            network = NetworkTopology.parse(network_filename_lines)
 
     controller = Controller(
         network=network,
@@ -109,16 +114,16 @@ def main(
     )
 
 
-def network_values_to_table(values: Dict, title: str = "") -> Table:
+def network_values_to_table(values: Dict, *, title: str = "") -> Table:
     network = app_options.controller.network
     table = Table(title=title)
-    table.add_column(f"Layer")
+    table.add_column("Node" if type(app_options.controller.network) is ArgumentationGraph else "Layer")
     max_nodes = 0
     for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
         nodes = network.number_of_nodes(layer=layer_index)
         max_nodes = max(nodes, max_nodes)
     for node_index, _ in enumerate(range(max_nodes), start=1):
-        table.add_column(f"Node {node_index}")
+        table.add_column("Value" if type(app_options.controller.network) is ArgumentationGraph else f"Node {node_index}")
 
     for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
         nodes = network.number_of_nodes(layer=layer_index)

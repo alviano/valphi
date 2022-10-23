@@ -1,6 +1,6 @@
 import dataclasses
 from collections import namedtuple
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Union
 
 import clingo
 
@@ -9,12 +9,14 @@ from clingo.symbol import Number
 from valphi import utils
 from valphi.contexts import Context
 from valphi.models import ModelCollect, ModelList, LastModel
-from valphi.networks import NetworkTopology
+from valphi.networks import NetworkTopology, ArgumentationGraph
 from valphi.propagators import ValPhiPropagator
 
 BASE_PROGRAM = """
 % let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
 val(0..max_value).
+
+sub_type(Attacked, Attacker, Weight) :- attack(Attacker, Attacked, Weight).
 
 
 % classes from the network topology
@@ -22,8 +24,10 @@ class(C) :- sub_type(C,_,_).
 class(C) :- sub_type(_,C,_).
 
 % inputs have binary values (biases fixed to max_value)
-{eval(C,0); eval(C,max_value)} = 1 :- class(C), not sub_type(C,_,_); C != bias(ID) : class(bias(ID)).
+{eval(C,0); eval(C,max_value)} = 1 :- binary_input; class(C), not sub_type(C,_,_); C != bias(ID) : class(bias(ID)).
 eval(bias(ID),max_value) :- class(bias(ID)), not sub_type(bias(ID),_,_).
+% or possibly not!
+{eval(C,V) : val(V)} = 1 :- not binary_input; class(C), not sub_type(C,_,_); C != bias(ID) : class(bias(ID)).
 
 % other classes take some value
 {eval(C,V) : val(V)} = 1 :- class(C), sub_type(C,_,_).
@@ -59,6 +63,8 @@ eval(neg(A),  max_value-V1) :- concept(neg(A)),   eval(A,V1).
 :- exactly_one(ID), #count{Concept : exactly_one(ID,Concept), eval(Concept,max_value)} != 1.
 
 % prevent these warnings
+binary_input :- #false.
+attack(0,0,0) :- #false.
 exactly_one(0) :- #false.
 exactly_one(0,0) :- #false.
 query(0,0,0) :- #false.
@@ -67,7 +73,7 @@ query(0,0,0) :- #false.
 
 @dataclasses.dataclass(frozen=True)
 class Controller:
-    network: NetworkTopology
+    network: Union[NetworkTopology, ArgumentationGraph]
     val_phi: List[float] = dataclasses.field(default_factory=lambda: Controller.default_val_phi())
     raw_code: str = dataclasses.field(default="")
     max_stable_models: int = dataclasses.field(default=0)
@@ -138,13 +144,19 @@ class Controller:
                                 eval_values=None)
 
     def __register_propagators(self, control):
-        for layer_index, _ in enumerate(range(1, self.network.number_of_layers()), start=2):
-            for node_index, _ in enumerate(range(self.network.number_of_nodes(layer=layer_index)), start=1):
-                control.register_propagator(ValPhiPropagator(f"l{layer_index}_{node_index}", val_phi=self.val_phi))
+        if type(self.network) is ArgumentationGraph:
+            for attacked in self.network.compute_attacked():
+                control.register_propagator(ValPhiPropagator(f"l{attacked}_1", val_phi=self.val_phi))
+        else:
+            for layer_index, _ in enumerate(range(1, self.network.number_of_layers()), start=2):
+                for node_index, _ in enumerate(range(self.network.number_of_nodes(layer=layer_index)), start=1):
+                    control.register_propagator(ValPhiPropagator(f"l{layer_index}_{node_index}", val_phi=self.val_phi))
 
-    @staticmethod
-    def network_topology_as_facts(network: NetworkTopology) -> List[str]:
-        res = []
+    @classmethod
+    def network_topology_as_facts(cls, network: Union[NetworkTopology, ArgumentationGraph]) -> List[str]:
+        if type(network) is ArgumentationGraph:
+            return cls.argumentation_graph_as_facts(network)
+        res = ["binary_input."]
         for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
             for node_index, _ in enumerate(range(network.number_of_nodes(layer=layer_index)), start=1):
                 weights = network.in_weights(layer=layer_index, node=node_index)
@@ -159,3 +171,7 @@ class Controller:
             for node in nodes:
                 res.append(f"exactly_one({index},l1_{node}).")
         return res
+
+    @staticmethod
+    def argumentation_graph_as_facts(graph: ArgumentationGraph) -> List[str]:
+        return [f"attack(l{attacker}_1, l{attacked}_1, \"{weight}\")." for (attacker, attacked, weight) in graph]
