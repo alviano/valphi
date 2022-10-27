@@ -52,18 +52,18 @@ class ValPhiPropagator(Propagator):
             if concept.name == self.output_node:
                 if self.__is_true(lit):
                     self.output_value = value.number
-                    continue
-                assert lit not in self.output_node_lit_to_value
-                self.output_node_lit_to_value[lit] = value.number
-                self.output_value_to_node_lit[value.number] = lit
-                init.add_watch(lit)
-            elif concept in self.input_nodes:
+                else:
+                    assert lit not in self.output_node_lit_to_value
+                    self.output_node_lit_to_value[lit] = value.number
+                    self.output_value_to_node_lit[value.number] = lit
+                    init.add_watch(lit)
+            if concept in self.input_nodes:
                 if self.__is_true(lit):
                     self.input_value[concept] = value.number
-                    continue
-                assert lit not in self.input_node_lit_to_value
-                self.input_node_lit_to_value[lit] = (concept, value.number)
-                init.add_watch(lit)
+                else:
+                    assert lit not in self.input_node_lit_to_value
+                    self.input_node_lit_to_value[lit] = (concept, value.number)
+                    init.add_watch(lit)
 
     def init(self, init):
         self.__reset()
@@ -76,10 +76,9 @@ class ValPhiPropagator(Propagator):
             self.trail.append(lit)
             if lit in self.output_node_lit_to_value:
                 self.output_value = self.output_node_lit_to_value[lit]
-                continue
-            assert lit in self.input_node_lit_to_value
-            concept, value = self.input_node_lit_to_value[lit]
-            self.input_value[concept] = value
+            if lit in self.input_node_lit_to_value:
+                concept, value = self.input_node_lit_to_value[lit]
+                self.input_value[concept] = value
 
         output_value = self.__compute_output_value()
         if output_value is None:
