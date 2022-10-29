@@ -13,3 +13,11 @@ class Context:
     @staticmethod
     def lt(num, den, real):
         return Number(1) if num.number < float(real.string) * den.number else Number(0)
+
+    @staticmethod
+    def gt(num, den, real):
+        return Number(1) if num.number > float(real.string) * den.number else Number(0)
+
+    @staticmethod
+    def godel_implication(left, right, den):
+        return den if left.number <= right.number else right

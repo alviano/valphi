@@ -34,30 +34,37 @@ eval(bias(ID),max_value) :- class(bias(ID)), not sub_type(bias(ID),_,_).
 
 
 % all relevant concept for the query
-concept(C) :- query(C,D,_).
-concept(D) :- query(C,D,_).
+concept(impl(C,D)) :- query(C,D,_).
+% concept(C) :- query(C,D,_).
+% concept(D) :- query(C,D,_).
 concept(A) :- concept(and(A,B)).
 concept(B) :- concept(and(A,B)).
 concept(A) :- concept(or(A,B)).
 concept(B) :- concept(or(A,B)).
 concept(A) :- concept(neg(A)).
+concept(A) :- concept(impl(A,B)).
+concept(B) :- concept(impl(A,B)).
 
 % Godel evaluation of complex concepts
 eval(and(A,B),@min(V1,V2))  :- concept(and(A,B)), eval(A,V1), eval(B,V2).
 eval( or(A,B),@max(V1,V2))  :- concept( or(A,B)), eval(A,V1), eval(B,V2).
 eval(neg(A),  max_value-V1) :- concept(neg(A)),   eval(A,V1).
-
+eval(impl(A,B), @godel_implication(V1,V2, max_value))
+                            :- concept(impl(A,B)), eval(A,V1), eval(B,V2).
 
 % find the largest truth degree for the left-hand-side concept of query 
 :~ query(C,_,_), eval(C,V). [-1@V+2, C,V]
 
 % verify if there is a counterexample for the right-hand-side concept of the query
-:~ query(_,D,Alpha), eval(D,V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
+:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
+% :~ query(_,D,Alpha), eval(D,V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
 
 #show.
 #show eval(C,V) : eval(C,V), class(C).
-#show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) != 1.
-#show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) =  1.
+#show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) != 1.
+#show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) =  1.
+% #show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) != 1.
+% #show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) =  1.
 
 % support exactly-one constraints encoded as exactly_one(ID). exactly_one(ID,Concept). ... exactly_one(ID,Concept).
 :- exactly_one(ID), #count{Concept : exactly_one(ID,Concept), eval(Concept,max_value)} != 1.
