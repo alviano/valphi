@@ -1,18 +1,17 @@
 import dataclasses
 from collections import namedtuple
-from typing import List, Dict, Optional, Tuple, Union
+from typing import List, Dict, Optional, Union, Final
 
 import clingo
-
 from clingo.symbol import Number
 
 from valphi import utils
 from valphi.contexts import Context
-from valphi.models import ModelCollect, ModelList, LastModel
+from valphi.models import ModelCollect, LastModel
 from valphi.networks import NetworkTopology, ArgumentationGraph
-from valphi.propagators import ValPhiPropagator
+from valphi.propagators import ValPhiPropagator, val_phi_as_weight_constraints
 
-BASE_PROGRAM = """
+BASE_PROGRAM: Final = """
 % let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
 val(0..max_value).
 
@@ -77,6 +76,31 @@ exactly_one(0,0) :- #false.
 query(0,0,0) :- #false.
 """
 
+ORDERED_ENCODING: Final = """
+concept_or_class(C) :- class(C).
+concept_or_class(C) :- concept(C).
+
+{eval_ge(C,V) : val(V), V > 0} :- concept_or_class(C).
+:- eval_ge(C,V), V > 1, not eval_ge(C,V-1).
+:- concept_or_class(C), eval(C,V), V > 0, not eval_ge(C,V).
+:- concept_or_class(C), eval_ge(C,V), not eval_ge(C,V+1), not eval(C,V).
+:- concept_or_class(C), not eval_ge(C,1), not eval(C,0).
+
+:- concept(and(A,B)), eval_ge(A,V), eval_ge(B,V); not eval_ge(and(A,B),V).
+:- concept(and(A,B)), val(V), V > 0; not eval_ge(A,V); eval_ge(and(A,B),V).
+:- concept(and(A,B)), val(V), V > 0; not eval_ge(B,V); eval_ge(and(A,B),V).
+
+:- concept( or(A,B)), eval_ge(A,V); not eval_ge(or(A,B),V).
+:- concept( or(A,B)), eval_ge(B,V); not eval_ge(or(A,B),V).
+:- concept( or(A,B)), val(V), V > 0; not eval_ge(A,V); not eval_ge(B,V); eval_ge(or(A,B),V).
+
+:- concept(neg(A)), eval_ge(A,V); eval_ge(neg(A),max_value-V+1).
+:- concept(neg(A)), val(V), V > 0; not eval_ge(A,V); not eval_ge(neg(A),max_value-V+1).
+
+:- concept(impl(A,B)), eval_ge(A,V), not eval_ge(B,V+1); not eval_ge(impl(A,B),max_value).
+:- concept(impl(A,B)), eval_ge(B,V), not eval_ge(A,V); not eval_ge(impl(A,B),V).
+"""
+
 
 @dataclasses.dataclass(frozen=True)
 class Controller:
@@ -84,6 +108,8 @@ class Controller:
     val_phi: List[float] = dataclasses.field(default_factory=lambda: Controller.default_val_phi())
     raw_code: str = dataclasses.field(default="")
     max_stable_models: int = dataclasses.field(default=0)
+    use_wc: bool = dataclasses.field(default=False)
+    use_ordered_encoding: bool = dataclasses.field(default=False)
 
     QueryResult = namedtuple("QueryResult", "query_true left_concept_value right_concept_value threshold eval_values")
 
@@ -103,10 +129,16 @@ class Controller:
         # control = clingo.Control(["--opt-strategy=usc,k,4", "--opt-usc-shrink=rgs"] if query else [])
         control = clingo.Control()
         control.configuration.solve.models = self.max_stable_models if query is None else 0
-        control.add("base", ["max_value"], BASE_PROGRAM + '\n'.join(self.network_topology_as_facts(self.network))
+        control.add("base", ["max_value"], BASE_PROGRAM + (ORDERED_ENCODING if self.use_ordered_encoding else "")
+                    + '\n'.join(self.network_topology_as_facts(self.network))
                     + self.raw_code + ("" if query is None else f"query({query})."))
-        self.__register_propagators(control)
         control.ground([("base", [Number(self.max_value)])], context=Context())
+        if self.use_wc:
+            constraints = self.__generate_wc(control)
+            control.add("base", ["max_value"], '\n'.join(constraints))
+            control.ground([("base", [Number(self.max_value)])], context=Context())
+        else:
+            self.__register_propagators(control)
         return control
 
     @staticmethod
@@ -158,6 +190,20 @@ class Controller:
             for layer_index, _ in enumerate(range(1, self.network.number_of_layers()), start=2):
                 for node_index, _ in enumerate(range(self.network.number_of_nodes(layer=layer_index)), start=1):
                     control.register_propagator(ValPhiPropagator(f"l{layer_index}_{node_index}", val_phi=self.val_phi))
+
+    def __generate_wc(self, control):
+        val_phi = [int(x) for x in self.val_phi]
+        constraints = []
+        if type(self.network) is ArgumentationGraph:
+            for attacked in self.network.compute_attacked():
+                constraints += val_phi_as_weight_constraints(control.symbolic_atoms, f"l{attacked}_1", val_phi=val_phi)
+        else:
+            for layer_index, _ in enumerate(range(1, self.network.number_of_layers()), start=2):
+                for node_index, _ in enumerate(range(self.network.number_of_nodes(layer=layer_index)), start=1):
+                    constraints += val_phi_as_weight_constraints(control.symbolic_atoms, f"l{layer_index}_{node_index}",
+                                                                 val_phi=val_phi)
+        # print('\n'.join(constraints))
+        return constraints
 
     @classmethod
     def network_topology_as_facts(cls, network: Union[NetworkTopology, ArgumentationGraph]) -> List[str]:

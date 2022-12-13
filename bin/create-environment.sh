@@ -8,8 +8,9 @@ fi
 
 conda create --name "$name" python=3.10
 
-conda install --yes --name "$name" pytest
+conda install --yes --name "$name" -c conda-forge poetry
+conda install --yes --name "$name" -c conda-forge chardet
 conda install --yes --name "$name" -c potassco clingo
-conda install --yes --name "$name" -c conda-forge typeguard
-conda install --yes --name "$name" -c conda-forge rich
-conda install --yes --name "$name" -c conda-forge typer
+conda update --all --yes --name "$name"
+
+echo "Activate the environment (conda activate $name) and run \"poetry install\""

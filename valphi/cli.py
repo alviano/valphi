@@ -67,6 +67,8 @@ def main(
         #     "-n",
         #     help="Maximum value for truth degrees (use rational values 0/n ... n/n)",
         # ),
+        wc: bool = typer.Option(False, help="Use weight constraints instead of ad-hoc propagator"),
+        ordered: bool = typer.Option(False, help="Add ordered encoding for eval/2"),
         debug: bool = typer.Option(False, "--debug", help="Don't minimize browser"),
 ):
     """
@@ -105,7 +107,9 @@ def main(
         network=network,
         val_phi=val_phi if val_phi_filename is not None else Controller.default_val_phi(),
         raw_code='\n'.join(lines),
-        max_stable_models=number_of_solutions
+        max_stable_models=number_of_solutions,
+        use_wc=wc,
+        use_ordered_encoding=ordered,
     )
 
     app_options = AppOptions(
@@ -183,6 +187,6 @@ def command_query(
         title = f"{str(res.query_true).upper()}: left concept {res.left_concept_value}; " \
                 f"right concept {res.right_concept_value} {'>=' if res.query_true else '<'} {res.threshold}"
         if res.query_true:
-            title += f" (right concept reaches the threshold in all solutions where the left concept is " \
-                     f"{res.right_concept_value})"
+            title += f" (the implication reaches the threshold in all solutions where the left concept is " \
+                     f"{res.left_concept_value})"
         console.print(network_values_to_table(res.eval_values, title=title))
