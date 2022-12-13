@@ -17,7 +17,6 @@ class Model:
         return Model([x for x in model.symbols(shown=True)])
 
     def __post_init__(self):
-        utils.validate_dataclass(self)
         self.__value.sort()
 
     def __str__(self):
@@ -47,7 +46,6 @@ class ModelList:
         return ModelList([])
 
     def __post_init__(self):
-        utils.validate_dataclass(self)
         self.__value.sort()
 
     def __str__(self):

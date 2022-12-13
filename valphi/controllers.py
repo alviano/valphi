@@ -11,96 +11,6 @@ from valphi.models import ModelCollect, LastModel
 from valphi.networks import NetworkTopology, ArgumentationGraph
 from valphi.propagators import ValPhiPropagator, val_phi_as_weight_constraints
 
-BASE_PROGRAM: Final = """
-% let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
-val(0..max_value).
-
-sub_type(Attacked, Attacker, Weight) :- attack(Attacker, Attacked, Weight).
-
-
-% classes from the network topology
-class(C) :- sub_type(C,_,_).
-class(C) :- sub_type(_,C,_).
-
-% inputs have binary values (biases fixed to max_value)
-{eval(C,0); eval(C,max_value)} = 1 :- binary_input; class(C), not sub_type(C,_,_); C != bias(ID) : class(bias(ID)).
-eval(bias(ID),max_value) :- class(bias(ID)), not sub_type(bias(ID),_,_).
-% or possibly not!
-{eval(C,V) : val(V)} = 1 :- not binary_input; class(C), not sub_type(C,_,_); C != bias(ID) : class(bias(ID)).
-
-% other classes take some value
-{eval(C,V) : val(V)} = 1 :- class(C), sub_type(C,_,_).
-
-
-% all relevant concept for the query
-concept(impl(C,D)) :- query(C,D,_).
-% concept(C) :- query(C,D,_).
-% concept(D) :- query(C,D,_).
-concept(A) :- concept(and(A,B)).
-concept(B) :- concept(and(A,B)).
-concept(A) :- concept(or(A,B)).
-concept(B) :- concept(or(A,B)).
-concept(A) :- concept(neg(A)).
-concept(A) :- concept(impl(A,B)).
-concept(B) :- concept(impl(A,B)).
-
-% Godel evaluation of complex concepts
-eval(and(A,B),@min(V1,V2))  :- concept(and(A,B)), eval(A,V1), eval(B,V2).
-eval( or(A,B),@max(V1,V2))  :- concept( or(A,B)), eval(A,V1), eval(B,V2).
-eval(neg(A),  max_value-V1) :- concept(neg(A)),   eval(A,V1).
-eval(impl(A,B), @godel_implication(V1,V2, max_value))
-                            :- concept(impl(A,B)), eval(A,V1), eval(B,V2).
-
-% find the largest truth degree for the left-hand-side concept of query 
-:~ query(C,_,_), eval(C,V). [-1@V+2, C,V]
-
-% verify if there is a counterexample for the right-hand-side concept of the query
-:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
-% :~ query(_,D,Alpha), eval(D,V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
-
-#show.
-#show eval(C,V) : eval(C,V), class(C).
-#show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) != 1.
-#show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) =  1.
-% #show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) != 1.
-% #show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) =  1.
-
-% support exactly-one constraints encoded as exactly_one(ID). exactly_one(ID,Concept). ... exactly_one(ID,Concept).
-:- exactly_one(ID), #count{Concept : exactly_one(ID,Concept), eval(Concept,max_value)} != 1.
-
-% prevent these warnings
-binary_input :- #false.
-attack(0,0,0) :- #false.
-exactly_one(0) :- #false.
-exactly_one(0,0) :- #false.
-query(0,0,0) :- #false.
-"""
-
-ORDERED_ENCODING: Final = """
-concept_or_class(C) :- class(C).
-concept_or_class(C) :- concept(C).
-
-{eval_ge(C,V) : val(V), V > 0} :- concept_or_class(C).
-:- eval_ge(C,V), V > 1, not eval_ge(C,V-1).
-:- concept_or_class(C), eval(C,V), V > 0, not eval_ge(C,V).
-:- concept_or_class(C), eval_ge(C,V), not eval_ge(C,V+1), not eval(C,V).
-:- concept_or_class(C), not eval_ge(C,1), not eval(C,0).
-
-:- concept(and(A,B)), eval_ge(A,V), eval_ge(B,V); not eval_ge(and(A,B),V).
-:- concept(and(A,B)), val(V), V > 0; not eval_ge(A,V); eval_ge(and(A,B),V).
-:- concept(and(A,B)), val(V), V > 0; not eval_ge(B,V); eval_ge(and(A,B),V).
-
-:- concept( or(A,B)), eval_ge(A,V); not eval_ge(or(A,B),V).
-:- concept( or(A,B)), eval_ge(B,V); not eval_ge(or(A,B),V).
-:- concept( or(A,B)), val(V), V > 0; not eval_ge(A,V); not eval_ge(B,V); eval_ge(or(A,B),V).
-
-:- concept(neg(A)), eval_ge(A,V); eval_ge(neg(A),max_value-V+1).
-:- concept(neg(A)), val(V), V > 0; not eval_ge(A,V); not eval_ge(neg(A),max_value-V+1).
-
-:- concept(impl(A,B)), eval_ge(A,V), not eval_ge(B,V+1); not eval_ge(impl(A,B),max_value).
-:- concept(impl(A,B)), eval_ge(B,V), not eval_ge(A,V); not eval_ge(impl(A,B),V).
-"""
-
 
 @dataclasses.dataclass(frozen=True)
 class Controller:
@@ -228,3 +138,94 @@ class Controller:
     @staticmethod
     def argumentation_graph_as_facts(graph: ArgumentationGraph) -> List[str]:
         return [f"attack(l{attacker}_1, l{attacked}_1, \"{weight}\")." for (attacker, attacked, weight) in graph]
+
+
+BASE_PROGRAM: Final = """
+% let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
+val(0..max_value).
+
+sub_type(Attacked, Attacker, Weight) :- attack(Attacker, Attacked, Weight).
+
+
+% classes from the network topology
+class(C) :- sub_type(C,_,_).
+class(C) :- sub_type(_,C,_).
+
+% inputs have binary values (biases fixed to max_value)
+{eval(C,0); eval(C,max_value)} = 1 :- binary_input; class(C), not sub_type(C,_,_); C != bias(ID) : class(bias(ID)).
+eval(bias(ID),max_value) :- class(bias(ID)), not sub_type(bias(ID),_,_).
+% or possibly not!
+{eval(C,V) : val(V)} = 1 :- not binary_input; class(C), not sub_type(C,_,_); C != bias(ID) : class(bias(ID)).
+
+% other classes take some value
+{eval(C,V) : val(V)} = 1 :- class(C), sub_type(C,_,_).
+
+
+% all relevant concept for the query
+concept(impl(C,D)) :- query(C,D,_).
+% concept(C) :- query(C,D,_).
+% concept(D) :- query(C,D,_).
+concept(A) :- concept(and(A,B)).
+concept(B) :- concept(and(A,B)).
+concept(A) :- concept(or(A,B)).
+concept(B) :- concept(or(A,B)).
+concept(A) :- concept(neg(A)).
+concept(A) :- concept(impl(A,B)).
+concept(B) :- concept(impl(A,B)).
+
+% Godel evaluation of complex concepts
+eval(and(A,B),@min(V1,V2))  :- concept(and(A,B)), eval(A,V1), eval(B,V2).
+eval( or(A,B),@max(V1,V2))  :- concept( or(A,B)), eval(A,V1), eval(B,V2).
+eval(neg(A),  max_value-V1) :- concept(neg(A)),   eval(A,V1).
+eval(impl(A,B), @godel_implication(V1,V2, max_value))
+                            :- concept(impl(A,B)), eval(A,V1), eval(B,V2).
+
+% find the largest truth degree for the left-hand-side concept of query 
+:~ query(C,_,_), eval(C,V). [-1@V+2, C,V]
+
+% verify if there is a counterexample for the right-hand-side concept of the query
+:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
+% :~ query(_,D,Alpha), eval(D,V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
+
+#show.
+#show eval(C,V) : eval(C,V), class(C).
+#show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) != 1.
+#show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) =  1.
+% #show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) != 1.
+% #show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) =  1.
+
+% support exactly-one constraints encoded as exactly_one(ID). exactly_one(ID,Concept). ... exactly_one(ID,Concept).
+:- exactly_one(ID), #count{Concept : exactly_one(ID,Concept), eval(Concept,max_value)} != 1.
+
+% prevent these warnings
+binary_input :- #false.
+attack(0,0,0) :- #false.
+exactly_one(0) :- #false.
+exactly_one(0,0) :- #false.
+query(0,0,0) :- #false.
+"""
+
+ORDERED_ENCODING: Final = """
+concept_or_class(C) :- class(C).
+concept_or_class(C) :- concept(C).
+
+{eval_ge(C,V) : val(V), V > 0} :- concept_or_class(C).
+:- eval_ge(C,V), V > 1, not eval_ge(C,V-1).
+:- concept_or_class(C), eval(C,V), V > 0, not eval_ge(C,V).
+:- concept_or_class(C), eval_ge(C,V), not eval_ge(C,V+1), not eval(C,V).
+:- concept_or_class(C), not eval_ge(C,1), not eval(C,0).
+
+:- concept(and(A,B)), eval_ge(A,V), eval_ge(B,V); not eval_ge(and(A,B),V).
+:- concept(and(A,B)), val(V), V > 0; not eval_ge(A,V); eval_ge(and(A,B),V).
+:- concept(and(A,B)), val(V), V > 0; not eval_ge(B,V); eval_ge(and(A,B),V).
+
+:- concept( or(A,B)), eval_ge(A,V); not eval_ge(or(A,B),V).
+:- concept( or(A,B)), eval_ge(B,V); not eval_ge(or(A,B),V).
+:- concept( or(A,B)), val(V), V > 0; not eval_ge(A,V); not eval_ge(B,V); eval_ge(or(A,B),V).
+
+:- concept(neg(A)), eval_ge(A,V); eval_ge(neg(A),max_value-V+1).
+:- concept(neg(A)), val(V), V > 0; not eval_ge(A,V); not eval_ge(neg(A),max_value-V+1).
+
+:- concept(impl(A,B)), eval_ge(A,V), not eval_ge(B,V+1); not eval_ge(impl(A,B),max_value).
+:- concept(impl(A,B)), eval_ge(B,V), not eval_ge(A,V); not eval_ge(impl(A,B),V).
+"""

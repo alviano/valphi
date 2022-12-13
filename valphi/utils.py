@@ -1,26 +1,14 @@
-import dataclasses
 import re
-from typing import Callable, List, Iterable
+from typing import Callable
 
-import clingo
-import typeguard
 import valid8
-from dataclass_type_validator import dataclass_type_validator, TypeValidationError
-from typeguard import typechecked
-
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
+from typeguard import typechecked
 
 console = Console()
 prompt = Prompt(console=console)
 confirm = Confirm(console=console)
-
-
-def validate_dataclass(data):
-    try:
-        dataclass_type_validator(data)
-    except TypeValidationError as e:
-        raise TypeError(e)
 
 
 @typechecked

@@ -6,7 +6,7 @@ if [ -z "$name" ]; then
     name="valphi"
 fi
 
-conda create --name "$name" python=3.10
+conda create --name "$name" python=3.10 --yes
 
 conda install --yes --name "$name" -c conda-forge poetry
 conda install --yes --name "$name" -c conda-forge chardet
