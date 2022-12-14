@@ -215,17 +215,26 @@ concept_or_class(C) :- concept(C).
 :- concept_or_class(C), eval_ge(C,V), not eval_ge(C,V+1), not eval(C,V).
 :- concept_or_class(C), not eval_ge(C,1), not eval(C,0).
 
+% A&B>=V <=> A>=V and B>=V 
+:- concept(and(A,B)), eval_ge(and(A,B),V); not eval_ge(A,V).
+:- concept(and(A,B)), eval_ge(and(A,B),V); not eval_ge(B,V).
 :- concept(and(A,B)), eval_ge(A,V), eval_ge(B,V); not eval_ge(and(A,B),V).
-:- concept(and(A,B)), val(V), V > 0; not eval_ge(A,V); eval_ge(and(A,B),V).
-:- concept(and(A,B)), val(V), V > 0; not eval_ge(B,V); eval_ge(and(A,B),V).
 
-:- concept( or(A,B)), eval_ge(A,V); not eval_ge(or(A,B),V).
-:- concept( or(A,B)), eval_ge(B,V); not eval_ge(or(A,B),V).
-:- concept( or(A,B)), val(V), V > 0; not eval_ge(A,V); not eval_ge(B,V); eval_ge(or(A,B),V).
+% A|B>=V <=> A>=V or B>=V
+:- concept(or(A,B)), eval_ge(or(A,B),V); not eval_ge(A,V), not eval_ge(B,V).
+:- concept(or(A,B)), eval_ge(A,V); not eval_ge(or(A,B),V).
+:- concept(or(A,B)), eval_ge(B,V); not eval_ge(or(A,B),V).
 
-:- concept(neg(A)), eval_ge(A,V); eval_ge(neg(A),max_value-V+1).
-:- concept(neg(A)), val(V), V > 0; not eval_ge(A,V); not eval_ge(neg(A),max_value-V+1).
+% ¬A>=V <=> A<=max_value-V
+:- concept(neg(A)); eval_ge(neg(A),V); eval_ge(A,max_value-V+1).
+:- concept(neg(A)), val(V), V > 0; not eval_ge(A,max_value-V+1); not eval_ge(neg(A),V).
 
-:- concept(impl(A,B)), eval_ge(A,V), not eval_ge(B,V+1); not eval_ge(impl(A,B),max_value).
-:- concept(impl(A,B)), eval_ge(B,V), not eval_ge(A,V); not eval_ge(impl(A,B),V).
+% A->B>=V <=> A<=B or B>=V
+premise_greater_than_conclusion(A,B) :-
+    concept(impl(A,B));
+    eval_ge(A,V);
+    not eval_ge(B,V).
+:- concept(impl(A,B)); eval_ge(impl(A,B),V); premise_greater_than_conclusion(A,B); not eval_ge(B,V).
+:- concept(impl(A,B)), val(V), V > 0; not premise_greater_than_conclusion(A,B); not eval_ge(impl(A,B),V).
+:- concept(impl(A,B)); eval_ge(B,V); not eval_ge(impl(A,B),V).
 """

@@ -74,8 +74,9 @@ def test_small_graph():
     check_all_options(graph)
 
 
-def test_kbmonk1():
-    graph = NetworkTopology.parse("""
+@pytest.fixture
+def kbmonk1():
+    return NetworkTopology.parse("""
 487 -6503 1211 5356 -6692 6458 225 97 -12 -77 -17 -87 5735 -2257 -2232 -1711 -110 -112
 142 618 1940 -3597 2130 864 -2428 131 135 460 152 197 4337 -1410 -1110 -1452 434 132
 525 -1660 2973 -1267 -2032 4261 -1840 53 107 -8 149 24 -865 495 383 480 276 311
@@ -88,24 +89,13 @@ def test_kbmonk1():
 =1 12 13 14 15
 =1 16 17
     """)
-    check_all_options(graph)
 
 
-def test_small_kbmonk1_query():
-    graph = NetworkTopology.parse("""
-487 -6503 1211 5356 -6692 6458 225 97 -12 -77 -17 -87 5735 -2257 -2232 -1711 -110 -112
-142 618 1940 -3597 2130 864 -2428 131 135 460 152 197 4337 -1410 -1110 -1452 434 132
-525 -1660 2973 -1267 -2032 4261 -1840 53 107 -8 149 24 -865 495 383 480 276 311
-#
--3671 9249 8640 -9420
-=1 1 2 3
-=1 4 5 6
-=1 7 8
-=1 9 10 11
-=1 12 13 14 15
-=1 16 17
-    """)
-    query = ''.join([line.strip() for line in """
+def queries():
+    def parse(string):
+        return ''.join([line.strip() for line in string.strip().split('\n')])
+    return [
+        parse("""
 l3_1
 #
 or(
@@ -120,5 +110,21 @@ or(
 )
 #
 1.0    
-    """.strip().split('\n')])
-    check_all_options_for_query(graph, query)
+        """),
+        parse("""
+l3_1
+#
+or(l1_1,l1_2)
+#
+1.0
+        """),
+    ]
+
+
+def test_kbmonk1(kbmonk1):
+    check_all_options(kbmonk1)
+
+
+@pytest.mark.parametrize("query", queries())
+def test_small_kbmonk1_query(kbmonk1, query):
+    check_all_options_for_query(kbmonk1, query)
