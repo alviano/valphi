@@ -1,10 +1,13 @@
 import re
-from typing import Callable
+from pathlib import Path
+from typing import Callable, Final
 
 import valid8
 from rich.console import Console
 from rich.prompt import Prompt, Confirm
 from typeguard import typechecked
+
+PROJECT_ROOT: Final = Path(__file__).parent.parent
 
 console = Console()
 prompt = Prompt(console=console)

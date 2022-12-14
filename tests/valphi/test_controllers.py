@@ -1,7 +1,30 @@
 import pytest
 
+from valphi import utils
 from valphi.controllers import Controller
 from valphi.networks import NetworkTopology, ArgumentationGraph
+
+
+def parse_query(string):
+    return ''.join([line.strip() for line in string.strip().split('\n')])
+
+
+def read_example_file(filename):
+    assert ".." not in filename
+    with open(utils.PROJECT_ROOT / f"examples/{filename}") as f:
+        return f.readlines()
+
+
+def read_query_from_file(filename):
+    return ''.join(x.strip() for x in read_example_file(f"{filename}.query"))
+
+
+def read_network_from_file(filename):
+    return NetworkTopology.parse('\n'.join(read_example_file(f"{filename}.network")))
+
+
+def read_graph_from_file(filename):
+    return ArgumentationGraph.parse('\n'.join(read_example_file(f"{filename}.graph")))
 
 
 @pytest.fixture
@@ -61,70 +84,56 @@ def check_all_options_for_query(network, query):
     assert simple.query_true == wc_ordered.query_true
 
 
-def test_small_graph():
-    graph = ArgumentationGraph.parse("""
-#graph
-1 2 3
-2 3 -5
-2 4 4
-3 4 -4
-4 5 -5000
-5 4 -5000
-    """)
-    check_all_options(graph)
-
-
 @pytest.fixture
 def kbmonk1():
-    return NetworkTopology.parse("""
-487 -6503 1211 5356 -6692 6458 225 97 -12 -77 -17 -87 5735 -2257 -2232 -1711 -110 -112
-142 618 1940 -3597 2130 864 -2428 131 135 460 152 197 4337 -1410 -1110 -1452 434 132
-525 -1660 2973 -1267 -2032 4261 -1840 53 107 -8 149 24 -865 495 383 480 276 311
-#
--3671 9249 8640 -9420
-=1 1 2 3
-=1 4 5 6
-=1 7 8
-=1 9 10 11
-=1 12 13 14 15
-=1 16 17
-    """)
+    return read_network_from_file("kbmonk1")
 
 
-def queries():
-    def parse(string):
-        return ''.join([line.strip() for line in string.strip().split('\n')])
+def kbmonk1_queries():
     return [
-        parse("""
-l3_1
-#
-or(
-    l1_12,
-    or(
-        and(l1_1,l1_4),
-        or(
-            and(l1_2,l1_5),
-            and(l1_3,l1_6)
-        )
-    )
-)
-#
-1.0    
-        """),
-        parse("""
-l3_1
-#
-or(l1_1,l1_2)
-#
-1.0
-        """),
+        read_query_from_file(f"kbmonk1-{index + 1}") for index in range(7)
     ]
 
 
-def test_kbmonk1(kbmonk1):
+def test_kbmonk1_solve(kbmonk1):
     check_all_options(kbmonk1)
 
 
-@pytest.mark.parametrize("query", queries())
-def test_small_kbmonk1_query(kbmonk1, query):
+@pytest.mark.parametrize("query", kbmonk1_queries())
+def test_kbmonk1_query(kbmonk1, query):
     check_all_options_for_query(kbmonk1, query)
+
+
+def graphs():
+    return [
+        read_graph_from_file(f"small-{index + 1}") for index in range(6)
+    ]
+
+
+@pytest.mark.parametrize("graph", graphs())
+def test_solve_graph(graph):
+    check_all_options(graph)
+
+
+def small_graph_5_queries():
+    return [
+        read_query_from_file(f"small-5-{index + 1}") for index in range(5)
+    ]
+
+
+def small_graph_6_queries():
+    return [
+        read_query_from_file(f"small-6-{index + 1}") for index in range(11)
+    ]
+
+
+@pytest.mark.parametrize("query", small_graph_5_queries())
+def test_solve_small_graph_5_with_query(query):
+    graph = read_graph_from_file("small-5")
+    check_all_options_for_query(graph, query)
+
+
+@pytest.mark.parametrize("query", small_graph_6_queries())
+def test_solve_small_graph_6_with_query(query):
+    graph = read_graph_from_file("small-6")
+    check_all_options_for_query(graph, query)
