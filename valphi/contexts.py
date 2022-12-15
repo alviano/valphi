@@ -1,7 +1,15 @@
 from clingo import Number
 
+from valphi.utils import validate
+
 
 class Context:
+    @staticmethod
+    def str_to_int(s):
+        f = float(s.string)
+        validate("is int", f.is_integer(), equals=True)
+        return Number(int(f))
+
     @staticmethod
     def min(a, b):
         return a if a < b else b
