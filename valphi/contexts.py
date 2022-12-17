@@ -1,3 +1,4 @@
+import clingo
 from clingo import Number
 
 from valphi.utils import validate
@@ -6,6 +7,8 @@ from valphi.utils import validate
 class Context:
     @staticmethod
     def str_to_int(s):
+        if s.type == clingo.SymbolType.Number:
+            return s
         f = float(s.string)
         validate("is int", f.is_integer(), equals=True)
         return Number(int(f))

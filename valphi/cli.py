@@ -7,7 +7,7 @@ from rich.table import Table
 
 from valphi import utils
 from valphi.controllers import Controller
-from valphi.networks import NetworkTopology, ArgumentationGraph
+from valphi.networks import NetworkTopology, ArgumentationGraph, MaxSAT
 from valphi.utils import console
 
 
@@ -86,6 +86,7 @@ def main(
         utils.validate('filenames', filename.exists() and filename.is_file(), equals=True,
                        help_msg=f"File {filename} does not exists")
 
+    val_phi = Controller.default_val_phi()
     if val_phi_filename is not None:
         utils.validate('val_phi_filename', val_phi_filename.exists() and val_phi_filename.is_file(), equals=True,
                        help_msg=f"File {val_phi_filename} does not exists")
@@ -99,13 +100,20 @@ def main(
 
     with open(network_filename) as f:
         network_filename_lines = f.readlines()
-        network = ArgumentationGraph.parse(network_filename_lines)
+        network = MaxSAT.parse(network_filename_lines)
+        if network is None:
+            network = ArgumentationGraph.parse(network_filename_lines)
         if network is None:
             network = NetworkTopology.parse(network_filename_lines)
 
+    if type(network) is MaxSAT:
+        utils.validate("val_phi cannot be changed for MaxSAT", val_phi_filename is None, equals=True)
+        utils.validate("--wc is required by MaxSAT", wc, equals=True)
+        val_phi = network.compute_val_phi()
+
     controller = Controller(
         network=network,
-        val_phi=val_phi if val_phi_filename is not None else Controller.default_val_phi(),
+        val_phi=val_phi,
         raw_code='\n'.join(lines),
         max_stable_models=number_of_solutions,
         use_wc=wc,
@@ -121,21 +129,43 @@ def main(
 def network_values_to_table(values: Dict, *, title: str = "") -> Table:
     network = app_options.controller.network
     table = Table(title=title)
-    table.add_column("Node" if type(app_options.controller.network) is ArgumentationGraph else "Layer")
-    max_nodes = 0
-    for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
-        nodes = network.number_of_nodes(layer=layer_index)
-        max_nodes = max(nodes, max_nodes)
-    for node_index, _ in enumerate(range(max_nodes), start=1):
-        table.add_column("Value" if type(app_options.controller.network) is ArgumentationGraph else f"Node {node_index}")
+    if type(network) is NetworkTopology:
+        table.add_column("Layer")
+        max_nodes = 0
+        for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
+            nodes = network.number_of_nodes(layer=layer_index)
+            max_nodes = max(nodes, max_nodes)
+        for node_index, _ in enumerate(range(max_nodes), start=1):
+            table.add_column(f"Node {node_index}")
 
-    for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
-        nodes = network.number_of_nodes(layer=layer_index)
-        table.add_row(
-            str(layer_index),
-            *(str(values[(layer_index, node_index)] / app_options.controller.max_value)
-              for node_index, _ in enumerate(range(nodes), start=1))
-        )
+        for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
+            nodes = network.number_of_nodes(layer=layer_index)
+            table.add_row(
+                str(layer_index),
+                *(str(values[(layer_index, node_index)] / app_options.controller.max_value)
+                  for node_index, _ in enumerate(range(nodes), start=1))
+            )
+    elif type(network) is ArgumentationGraph:
+        table.add_column("Node")
+        table.add_column("Truth degree")
+        for node, _ in enumerate(network.compute_arguments(), start=1):
+            table.add_row(
+                str(node),
+                str(values[network.term(node)] / app_options.controller.max_value),
+            )
+    elif type(network) is MaxSAT:
+        table.add_column("# of satisfied clauses / Atom / Clause")
+        table.add_column("Value")
+        for node in values.keys():
+            if node.startswith("even"):
+                continue
+            value = values[node]
+            if node != "sat":
+                value = "false" if value == 0 else "true"
+            table.add_row(
+                str(node),
+                str(value),
+            )
     return table
 
 

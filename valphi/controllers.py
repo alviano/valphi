@@ -8,13 +8,13 @@ from clingo.symbol import Number
 from valphi import utils
 from valphi.contexts import Context
 from valphi.models import ModelCollect, LastModel
-from valphi.networks import NetworkTopology, ArgumentationGraph
+from valphi.networks import NetworkTopology, ArgumentationGraph, NetworkAspEncoding, MaxSAT
 from valphi.propagators import ValPhiPropagator
 
 
 @dataclasses.dataclass(frozen=True)
 class Controller:
-    network: Union[NetworkTopology, ArgumentationGraph]
+    network: Union[NetworkTopology, ArgumentationGraph, NetworkAspEncoding, MaxSAT]
     val_phi: List[float] = dataclasses.field(default_factory=lambda: Controller.default_val_phi())
     raw_code: str = dataclasses.field(default="")
     max_stable_models: int = dataclasses.field(default=0)
@@ -26,6 +26,8 @@ class Controller:
     def __post_init__(self):
         utils.validate("max_value", self.max_value, min_value=1, max_value=1000)
         utils.validate("val_phi", self.val_phi, equals=sorted(self.val_phi))
+        if type(self.network) is MaxSAT:
+            utils.validate("", self.val_phi, equals=self.network.compute_val_phi())
 
     @staticmethod
     def default_val_phi() -> List[float]:
@@ -51,25 +53,32 @@ class Controller:
             self.__register_propagators(control)
         return control
 
-    @staticmethod
-    def __read_eval(model) -> Dict:
+    def __read_eval(self, model) -> Dict:
         res = {}
         for symbol in model:
             if symbol.name == "eval":
                 concept, value = symbol.arguments
                 if concept.name == "bias":
                     continue
-                layer, node = concept.name[1:].split('_', maxsplit=1)
-                res[(int(layer), int(node))] = value.number
+                if type(self.network) is NetworkTopology:
+                    layer, node = concept.name[1:].split('_', maxsplit=1)
+                    res[(int(layer), int(node))] = value.number
+                else:
+                    res[str(concept)] = value.number
         return res
 
     def find_solutions(self) -> List[Dict]:
+        if type(self.network) is MaxSAT:
+            raise ValueError("Use 'query even' for MaxSAT")
         control = self.__setup_control()
         model_collect = ModelCollect()
         control.solve(on_model=model_collect)
         return [self.__read_eval(model) for model in model_collect]
 
     def answer_query(self, query: str) -> QueryResult:
+        if type(self.network) is MaxSAT:
+            utils.validate("query", query, equals="even")
+            query = MaxSAT.compute_query()
         utils.validate("query", query, custom=[utils.pattern(r"[^#]+#[^#]+#(1|1.0|0\.\d+)")])
         left, right, threshold = query.split('#')
         control = self.__setup_control(f"{left},{right},\"{threshold}\"")
@@ -95,11 +104,14 @@ class Controller:
     def __register_propagators(self, control):
         if type(self.network) is ArgumentationGraph:
             for attacked in self.network.compute_attacked():
-                control.register_propagator(ValPhiPropagator(f"l{attacked}_1", val_phi=self.val_phi))
-        else:
+                control.register_propagator(ValPhiPropagator(ArgumentationGraph.term(attacked), val_phi=self.val_phi))
+        elif type(self.network) is NetworkTopology:
             for layer_index, _ in enumerate(range(1, self.network.number_of_layers()), start=2):
                 for node_index, _ in enumerate(range(self.network.number_of_nodes(layer=layer_index)), start=1):
-                    control.register_propagator(ValPhiPropagator(f"l{layer_index}_{node_index}", val_phi=self.val_phi))
+                    control.register_propagator(ValPhiPropagator(NetworkTopology.term(layer_index, node_index),
+                                                                 val_phi=self.val_phi))
+        else:
+            raise ValueError
 
     def __generate_wc(self, control):
         res = [f"val_phi(0,none,{self.val_phi[0]})."]
@@ -113,28 +125,38 @@ class Controller:
         return res
 
     @classmethod
-    def network_topology_as_facts(cls, network: Union[NetworkTopology, ArgumentationGraph]) -> List[str]:
+    def network_topology_as_facts(
+            cls,
+            network: Union[NetworkTopology, ArgumentationGraph, NetworkAspEncoding, MaxSAT]
+    ) -> List[str]:
+        if type(network) is NetworkAspEncoding:
+            return [network.value]
         if type(network) is ArgumentationGraph:
             return cls.argumentation_graph_as_facts(network)
+        if type(network) is MaxSAT:
+            return [f"{atom}." for atom in network.compute_network_facts()]
         res = ["binary_input."]
         for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
             for node_index, _ in enumerate(range(network.number_of_nodes(layer=layer_index)), start=1):
                 weights = network.in_weights(layer=layer_index, node=node_index)
                 if weights:
-                    res.append(f"sub_type(l{layer_index}_{node_index},bias(l{layer_index - 1}),\"{weights[0]}\").")
+                    res.append(f"sub_type({network.term(layer_index, node_index)},"
+                               f"bias({network.layer_term(layer_index - 1)}),\"{weights[0]}\").")
                     for weight_index, weight in enumerate(weights[1:], start=1):
                         res.append(
-                            f"sub_type(l{layer_index}_{node_index},l{layer_index - 1}_{weight_index},\"{weight}\").")
+                            f"sub_type({network.term(layer_index, node_index)},"
+                            f"{network.term(layer_index - 1, weight_index)},\"{weight}\").")
         for index in range(network.number_of_exactly_one()):
             nodes = network.nodes_in_exactly_one(index)
             res.append(f"exactly_one({index}).")
             for node in nodes:
-                res.append(f"exactly_one({index},l1_{node}).")
+                res.append(f"exactly_one({index},{network.term(1, node)}).")
         return res
 
     @staticmethod
     def argumentation_graph_as_facts(graph: ArgumentationGraph) -> List[str]:
-        return [f"attack(l{attacker}_1, l{attacked}_1, \"{weight}\")." for (attacker, attacked, weight) in graph]
+        return [f"attack({graph.term(attacker)}, {graph.term(attacked)}, \"{weight}\")."
+                for (attacker, attacked, weight) in graph]
 
 
 BASE_PROGRAM: Final = """

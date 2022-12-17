@@ -2,7 +2,7 @@ import pytest
 
 from valphi import utils
 from valphi.controllers import Controller
-from valphi.networks import NetworkTopology, ArgumentationGraph
+from valphi.networks import NetworkTopology, ArgumentationGraph, MaxSAT
 
 
 def parse_query(string):
@@ -137,3 +137,33 @@ def test_solve_small_graph_5_with_query(query):
 def test_solve_small_graph_6_with_query(query):
     graph = read_graph_from_file("small-6")
     check_all_options_for_query(graph, query)
+
+
+def test_max_sat_even():
+    max_sat = MaxSAT.parse("""
+p cnf 0 0
+1 2 0
+-1 0
+-2 0
+    """.strip())
+    wc = Controller(network=max_sat, use_wc=True, use_ordered_encoding=False, val_phi=max_sat.compute_val_phi())\
+        .answer_query("even")
+    wc_ordered = Controller(network=max_sat, use_wc=True, use_ordered_encoding=True, val_phi=max_sat.compute_val_phi())\
+        .answer_query("even")
+    assert wc.query_true
+    assert wc_ordered.query_true
+
+
+def test_max_sat_odd():
+    max_sat = MaxSAT.parse("""
+p cnf 0 0
+1 2 3 0
+-1 -3 0
+-2 -3 0
+    """.strip())
+    wc = Controller(network=max_sat, use_wc=True, use_ordered_encoding=False, val_phi=max_sat.compute_val_phi())\
+        .answer_query("even")
+    wc_ordered = Controller(network=max_sat, use_wc=True, use_ordered_encoding=True, val_phi=max_sat.compute_val_phi())\
+        .answer_query("even")
+    assert not wc.query_true
+    assert not wc_ordered.query_true
