@@ -29,7 +29,7 @@ class Model:
         return Model([], key=Model.__key)
 
     @staticmethod
-    def of_program(program: List[str]) -> 'Model':
+    def of_program(program: Iterable[str]) -> 'Model':
         control = clingo.Control()
         control.add("base", [], '\n'.join(program))
         control.ground([("base", [])])

@@ -61,6 +61,10 @@ class NetworkInterface:
     def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
         raise NotImplemented
 
+    @cached_property
+    def val_phi(self):
+        raise NotImplemented
+
 
 @typeguard.typechecked
 @dataclasses.dataclass(frozen=True)
@@ -290,45 +294,40 @@ class MaxSAT(NetworkInterface):
 
     @cached_property
     def _network_facts(self) -> Model:
-        control = clingo.Control()
-        control.add("base", ["max_value"], '\n'.join(self.serialize_clauses_as_facts()) + """
+        max_value = clingo.Number(self.number_of_clauses)
+        return Model.of_program(self.serialize_clauses_as_facts() + [f"""
 atom(Atom) :- clause_positive_literal(Clause, Atom).
 atom(Atom) :- clause_negative_literal(Clause, Atom).
 
 % boolean assignment
-sub_type(A,A, max_value + 1) :- atom(A).
+sub_type(A,A, {max_value} + 1) :- atom(A).
 
 % clause satisfaction
-sub_type(C,bias(C),NegativeLiterals * max_value) :- clause(C), NegativeLiterals = #count{A : clause_negative_literal(C,A)}.
-sub_type(C,A,max_value) :- clause(C), clause_positive_literal(C,A).
-sub_type(C,A,-max_value) :- clause(C), clause_negative_literal(C,A).
+sub_type(C,bias(C),NegativeLiterals * {max_value}) :- clause(C), NegativeLiterals = #count{{A : clause_negative_literal(C,A)}}.
+sub_type(C,A,{max_value}) :- clause(C), clause_positive_literal(C,A).
+sub_type(C,A,-{max_value}) :- clause(C), clause_negative_literal(C,A).
 
 % number of satisfied clauses
 sub_type(sat,C,1) :- clause(C).
 
 % even_0 is true
-sub_type(even(0), bias(even(0)), max_value).
+sub_type(even(0), bias(even(0)), {max_value}).
 
-% even'_{i+1} = valphi(n * (1 - even_i + C_{i+1} - 1)) = max(0, C_{i+1} - even_i)   --- 1 if and only if ~even_i & C_i is true
-sub_type(even'(I+1),even(I),-max_value) :- I = 0..max_value-1.
-sub_type(even'(I+1),c(I+1),max_value) :- I = 0..max_value-1.
+% even'(i+1) = valphi(n * (1 - even_i + C(i+1) - 1)) = max(0, C(i+1) - even_i)   --- 1 if and only if ~even_i & C_i is true
+sub_type(even'(I+1),even(I),-{max_value}) :- I = 0..{max_value}-1.
+sub_type(even'(I+1),c(I+1),{max_value}) :- I = 0..{max_value}-1.
 
-% even''_{i+1} = valphi(n * (even_i + 1 - C_{i+1} - 1)) = max(0, even_i - C_{i+1})  --- 1 if and only even_i & ¬C_i is true
-sub_type(even''(I+1),even(I),max_value) :- I = 0..max_value-1.
-sub_type(even''(I+1),c(I+1),-max_value) :- I = 0..max_value-1.
+% even''(i+1) = valphi(n * (even_i + 1 - C(i+1) - 1)) = max(0, even_i - C(i+1))  --- 1 if and only even_i & ¬C_i is true
+sub_type(even''(I+1),even(I),{max_value}) :- I = 0..{max_value}-1.
+sub_type(even''(I+1),c(I+1),-{max_value}) :- I = 0..{max_value}-1.
 
-% even_{i+1} = valphi(n * (even'_{i+1} + even''_{i+1})) = min(1, even'_{i+1} + even''_{i+1})    --- 1 if and only even'_{i+1} | even''_{i+1} is true
-sub_type(even(I+1),even'(I+1),max_value) :- I = 0..max_value-1.
-sub_type(even(I+1),even''(I+1),max_value) :- I = 0..max_value-1.
+% even(i+1) = valphi(n * (even'(i+1) + even''(i+1))) = min(1, even'(i+1) + even''(i+1))    --- 1 if and only even'(i+1) | even''(i+1) is true
+sub_type(even(I+1),even'(I+1),{max_value}) :- I = 0..{max_value}-1.
+sub_type(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_value}-1.
 
 #show.
 #show sub_type/3.
-        """)
-        control.ground([("base", [clingo.Number(self.number_of_clauses)])])
-        model_collect = ModelCollect()
-        control.solve(on_model=model_collect)
-        utils.validate("one model", model_collect, length=1)
-        return model_collect[0]
+        """])
 
     @cached_property
     def query(self) -> str:
@@ -341,4 +340,9 @@ sub_type(even(I+1),even''(I+1),max_value) :- I = 0..max_value-1.
         return [truth_degree * self.number_of_clauses for truth_degree in range(self.number_of_clauses)]
 
     def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
-        pass
+        output_nodes = Model.of_program(self.network_facts.as_strings() + ("""
+#show.
+#show Node : sub_type(Node,_,_).
+        """,))
+        for node in output_nodes:
+            control.register_propagator(ValPhiPropagator(str(node), val_phi=val_phi))

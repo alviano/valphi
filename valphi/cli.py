@@ -104,7 +104,6 @@ def main(
 
     if type(network) is MaxSAT:
         utils.validate("val_phi cannot be changed for MaxSAT", val_phi_filename is None, equals=True)
-        utils.validate("--wc is required by MaxSAT", wc, equals=True)
         val_phi = network.val_phi
 
     controller = Controller(

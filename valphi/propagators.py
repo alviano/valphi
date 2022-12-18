@@ -40,10 +40,11 @@ class ValPhiPropagator(Propagator):
     def __read_input_nodes(self, init) -> None:
         for s in init.symbolic_atoms.by_signature("sub_type", 3):
             concept1, concept2, weight = s.symbol.arguments
-            if concept1.name == self.output_node:
+            if str(concept1) == self.output_node:
                 self.input_nodes.add(concept2)
                 self.input_value[concept2] = None
-                self.input_weight[concept2] = float(weight.string)
+                self.input_weight[concept2] = float(weight.string) if weight.type == clingo.SymbolType.String \
+                    else float(weight.number)
 
     def __read_eval(self, init) -> None:
         for s in init.symbolic_atoms.by_signature("eval", 2):
@@ -51,7 +52,7 @@ class ValPhiPropagator(Propagator):
             lit = init.solver_literal(s.literal)
             if self.__is_false(lit):
                 continue
-            if concept.name == self.output_node:
+            if str(concept) == self.output_node:
                 if self.__is_true(lit):
                     self.output_value = value.number
                 else:

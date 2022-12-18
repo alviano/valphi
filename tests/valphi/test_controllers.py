@@ -79,11 +79,17 @@ def check_all_options_for_query(network, query):
     assert simple.query_true == wc_ordered.query_true
 
 
-def check_all_options_for_max_sat(network, even):
-    # simple = Controller(network=network, use_wc=False, use_ordered_encoding=False).answer_query(query)
+def check_all_options_for_max_sat(network, even, only_wc: bool = True):
+    if not only_wc:
+        simple = Controller(network=network, use_wc=False, use_ordered_encoding=False, val_phi=network.val_phi)\
+            .answer_query("even")
+        ordered = Controller(network=network, use_wc=False, use_ordered_encoding=True, val_phi=network.val_phi)\
+            .answer_query("even")
+        assert simple.query_true == even
+        assert ordered.query_true == even
+
     wc = Controller(network=network, use_wc=True, use_ordered_encoding=False, val_phi=network.val_phi)\
         .answer_query("even")
-    # ordered = Controller(network=network, use_wc=False, use_ordered_encoding=True).answer_query(query)
     wc_ordered = Controller(network=network, use_wc=True, use_ordered_encoding=True,
                             val_phi=network.val_phi).answer_query("even")
     assert wc.query_true == even
@@ -152,7 +158,7 @@ p cnf 0 0
 -1 0
 -2 0
     """.strip())
-    check_all_options_for_max_sat(max_sat, even=True)
+    check_all_options_for_max_sat(max_sat, even=True, only_wc=False)
 
 
 def test_max_sat_odd():
@@ -162,19 +168,21 @@ p cnf 0 0
 -1 -3 0
 -2 -3 0
     """.strip())
-    check_all_options_for_max_sat(max_sat, even=False)
+    check_all_options_for_max_sat(max_sat, even=False, only_wc=False)
 
 
 def max_sat_odd_instances():
     return [
         read_cnf_from_file("php-4-1-odd"),
         read_cnf_from_file("php-4-3-odd"),
+        read_cnf_from_file("php-5-1-odd"),
     ]
 
 
 def max_sat_even_instances():
     return [
         read_cnf_from_file("php-4-2-even"),
+        read_cnf_from_file("php-5-2-even"),
     ]
 
 
