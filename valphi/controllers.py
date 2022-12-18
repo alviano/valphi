@@ -1,6 +1,6 @@
 import dataclasses
 from collections import namedtuple
-from typing import List, Dict, Optional, Union, Final
+from typing import List, Dict, Optional, Final
 
 import clingo
 from clingo.symbol import Number
@@ -8,13 +8,12 @@ from clingo.symbol import Number
 from valphi import utils
 from valphi.contexts import Context
 from valphi.models import ModelCollect, LastModel
-from valphi.networks import NetworkTopology, ArgumentationGraph, NetworkAspEncoding, MaxSAT
-from valphi.propagators import ValPhiPropagator
+from valphi.networks import NetworkTopology, MaxSAT, NetworkInterface
 
 
 @dataclasses.dataclass(frozen=True)
 class Controller:
-    network: Union[NetworkTopology, ArgumentationGraph, NetworkAspEncoding, MaxSAT]
+    network: NetworkInterface
     val_phi: List[float] = dataclasses.field(default_factory=lambda: Controller.default_val_phi())
     raw_code: str = dataclasses.field(default="")
     max_stable_models: int = dataclasses.field(default=0)
@@ -27,7 +26,7 @@ class Controller:
         utils.validate("max_value", self.max_value, min_value=1, max_value=1000)
         utils.validate("val_phi", self.val_phi, equals=sorted(self.val_phi))
         if type(self.network) is MaxSAT:
-            utils.validate("", self.val_phi, equals=self.network.compute_val_phi())
+            utils.validate("", self.val_phi, equals=self.network.val_phi)
 
     @staticmethod
     def default_val_phi() -> List[float]:
@@ -42,15 +41,15 @@ class Controller:
         control = clingo.Control()
         control.configuration.solve.models = self.max_stable_models if query is None else 0
         control.add("base", ["max_value"], BASE_PROGRAM + (ORDERED_ENCODING if self.use_ordered_encoding else "")
-                    + '\n'.join(self.network_topology_as_facts(self.network))
+                    + '\n'.join(self.network.network_facts.as_strings())
                     + self.raw_code + ("" if query is None else f"query({query})."))
         control.ground([("base", [Number(self.max_value)])], context=Context())
         if self.use_wc:
-            constraints = self.__generate_wc(control)
+            constraints = self.__generate_wc()
             control.add("base", ["max_value"], '\n'.join(constraints))
             control.ground([("base", [Number(self.max_value)])], context=Context())
         else:
-            self.__register_propagators(control)
+            self.network.register_propagators(control, self.val_phi)
         return control
 
     def __read_eval(self, model) -> Dict:
@@ -78,7 +77,7 @@ class Controller:
     def answer_query(self, query: str) -> QueryResult:
         if type(self.network) is MaxSAT:
             utils.validate("query", query, equals="even")
-            query = MaxSAT.compute_query()
+            query = self.network.query
         utils.validate("query", query, custom=[utils.pattern(r"[^#]+#[^#]+#(1|1.0|0\.\d+)")])
         left, right, threshold = query.split('#')
         control = self.__setup_control(f"{left},{right},\"{threshold}\"")
@@ -101,19 +100,7 @@ class Controller:
         return self.QueryResult(query_true=None, left_concept_value=None, right_concept_value=None, threshold=None,
                                 eval_values=None)
 
-    def __register_propagators(self, control):
-        if type(self.network) is ArgumentationGraph:
-            for attacked in self.network.compute_attacked():
-                control.register_propagator(ValPhiPropagator(ArgumentationGraph.term(attacked), val_phi=self.val_phi))
-        elif type(self.network) is NetworkTopology:
-            for layer_index, _ in enumerate(range(1, self.network.number_of_layers()), start=2):
-                for node_index, _ in enumerate(range(self.network.number_of_nodes(layer=layer_index)), start=1):
-                    control.register_propagator(ValPhiPropagator(NetworkTopology.term(layer_index, node_index),
-                                                                 val_phi=self.val_phi))
-        else:
-            raise ValueError
-
-    def __generate_wc(self, control):
+    def __generate_wc(self):
         res = [f"val_phi(0,none,{self.val_phi[0]})."]
         for value in range(len(self.val_phi) - 1):
             res.append(f"val_phi({value + 1},{self.val_phi[value]},{self.val_phi[value + 1]}).")
@@ -123,40 +110,6 @@ class Controller:
         else:
             res.append(WC_ENCODING)
         return res
-
-    @classmethod
-    def network_topology_as_facts(
-            cls,
-            network: Union[NetworkTopology, ArgumentationGraph, NetworkAspEncoding, MaxSAT]
-    ) -> List[str]:
-        if type(network) is NetworkAspEncoding:
-            return [network.value]
-        if type(network) is ArgumentationGraph:
-            return cls.argumentation_graph_as_facts(network)
-        if type(network) is MaxSAT:
-            return [f"{atom}." for atom in network.compute_network_facts()]
-        res = ["binary_input."]
-        for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
-            for node_index, _ in enumerate(range(network.number_of_nodes(layer=layer_index)), start=1):
-                weights = network.in_weights(layer=layer_index, node=node_index)
-                if weights:
-                    res.append(f"sub_type({network.term(layer_index, node_index)},"
-                               f"bias({network.layer_term(layer_index - 1)}),\"{weights[0]}\").")
-                    for weight_index, weight in enumerate(weights[1:], start=1):
-                        res.append(
-                            f"sub_type({network.term(layer_index, node_index)},"
-                            f"{network.term(layer_index - 1, weight_index)},\"{weight}\").")
-        for index in range(network.number_of_exactly_one()):
-            nodes = network.nodes_in_exactly_one(index)
-            res.append(f"exactly_one({index}).")
-            for node in nodes:
-                res.append(f"exactly_one({index},{network.term(1, node)}).")
-        return res
-
-    @staticmethod
-    def argumentation_graph_as_facts(graph: ArgumentationGraph) -> List[str]:
-        return [f"attack({graph.term(attacker)}, {graph.term(attacked)}, \"{weight}\")."
-                for (attacker, attacked, weight) in graph]
 
 
 BASE_PROGRAM: Final = """

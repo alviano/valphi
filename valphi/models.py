@@ -1,5 +1,6 @@
 import dataclasses
-from typing import List, Iterable
+from dataclasses import InitVar
+from typing import List, Iterable, Any, Tuple
 
 import clingo
 import typeguard
@@ -11,13 +12,31 @@ from valphi import utils
 @dataclasses.dataclass(order=True, unsafe_hash=True, frozen=True)
 class Model:
     __value: List[clingo.Symbol]
+    key: InitVar[Any] = dataclasses.field()
+
+    __key = object
+
+    def __post_init__(self, key: Any):
+        utils.validate("key", key, equals=self.__key)
+        self.__value.sort()
 
     @staticmethod
-    def of(model: clingo.Model):
-        return Model([x for x in model.symbols(shown=True)])
+    def of(model: clingo.Model) -> 'Model':
+        return Model([x for x in model.symbols(shown=True)], key=Model.__key)
 
-    def __post_init__(self):
-        self.__value.sort()
+    @staticmethod
+    def empty() -> 'Model':
+        return Model([], key=Model.__key)
+
+    @staticmethod
+    def of_program(program: List[str]) -> 'Model':
+        control = clingo.Control()
+        control.add("base", [], '\n'.join(program))
+        control.ground([("base", [])])
+        model_collect = ModelCollect()
+        control.solve(on_model=model_collect)
+        utils.validate("one model", model_collect, length=1)
+        return model_collect[0]
 
     def __str__(self):
         return ' '.join(str(x) for x in self.__value)
@@ -30,6 +49,9 @@ class Model:
 
     def __iter__(self):
         return self.__value.__iter__()
+
+    def as_strings(self) -> Tuple[str, ...]:
+        return tuple(f"{atom}." for atom in self.__value)
 
 
 @typeguard.typechecked

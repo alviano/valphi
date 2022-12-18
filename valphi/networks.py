@@ -1,26 +1,76 @@
 import dataclasses
-from typing import List, Tuple, Optional, Union, Any, Set
+from typing import List, Tuple, Optional, Union, Any, Set, FrozenSet
 
 import clingo
 import typeguard
+from distlib.util import cached_property
 
 from valphi import utils
 from valphi.models import ModelCollect, Model
-from valphi.utils import validate
+from valphi.propagators import ValPhiPropagator
 
 
 @typeguard.typechecked
 @dataclasses.dataclass(frozen=True)
-class NetworkTopology:
-    __layers: List[List[List[float]]] = dataclasses.field(default_factory=list, init=False)
-    __exactly_one: List[List[int]] = dataclasses.field(default_factory=list, init=False)
+class NetworkInterface:
+    __complete: List[bool] = dataclasses.field(default_factory=lambda: [False], init=False)
+
+    __parse_key = object()
 
     @staticmethod
-    def parse(s: Union[str, List[str]]) -> 'NetworkTopology':
+    def parse(s: Union[str, List[str]]) -> 'NetworkInterface':
         if type(s) == str:
             lines = [x.strip() for x in s.strip().split('\n')]
         else:
             lines = [x.strip() for x in s]
+        res = MaxSAT.parse_implementation(lines, NetworkInterface.__parse_key)
+        if res is None:
+            res = ArgumentationGraph.parse_implementation(lines, NetworkInterface.__parse_key)
+        if res is None:
+            res = NetworkTopology.parse_implementation(lines, NetworkInterface.__parse_key)
+        return res
+
+    def complete(self):
+        utils.validate("complete", self.__complete[0], equals=False)
+        self.__complete[0] = True
+        return self
+
+    @staticmethod
+    def validate_parse_key(key: Any):
+        utils.validate("key", key, equals=NetworkInterface.__parse_key)
+
+    def validate_is_complete(self):
+        utils.validate("complete", self.__complete[0], equals=True)
+
+    def validate_is_not_complete(self):
+        utils.validate("not complete", self.__complete[0], equals=False)
+
+    @cached_property
+    def network_facts(self) -> Model:
+        self.validate_is_complete()
+        return self._network_facts
+
+    @cached_property
+    def _network_facts(self) -> Model:
+        raise NotImplemented
+
+    def register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
+        self.validate_is_complete()
+        return self._register_propagators(control, val_phi)
+
+    def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
+        raise NotImplemented
+
+
+@typeguard.typechecked
+@dataclasses.dataclass(frozen=True)
+class NetworkTopology(NetworkInterface):
+    __layers: List[List[List[float]]] = dataclasses.field(default_factory=list, init=False)
+    __exactly_one: List[List[int]] = dataclasses.field(default_factory=list, init=False)
+
+    @staticmethod
+    def parse_implementation(lines: List[str], key: Any) -> 'NetworkTopology':
+        NetworkInterface.validate_parse_key(key)
         res = NetworkTopology().add_layer()
         for line in lines:
             if not line:
@@ -32,18 +82,20 @@ class NetworkTopology:
                 res.add_exactly_one([int(x) for x in line.split()[1:]])
                 continue
             weights = [float(x) for x in line.split()]
-            if res.number_of_layers() == 1:
+            if len(res.__layers) == 1:
                 for _ in weights[1:]:
                     res.add_node()
                 res.add_layer()
             res.add_node(weights)
-        return res
+        return res.complete()
 
     def add_layer(self) -> 'NetworkTopology':
+        self.validate_is_not_complete()
         self.__layers.append([])
         return self
 
     def add_node(self, weights: Optional[List[float]] = None) -> 'NetworkTopology':
+        self.validate_is_not_complete()
         utils.validate("has layer", self.__layers, min_len=1)
         if len(self.__layers) == 1:
             utils.validate("weights", weights, enforce_not_none=False, equals=None)
@@ -54,6 +106,7 @@ class NetworkTopology:
         return self
 
     def add_exactly_one(self, input_nodes: List[int]) -> 'NetworkTopology':
+        self.validate_is_not_complete()
         utils.validate("has layer", self.__layers, min_len=1)
         weights = self.__get_layer(1)
         utils.validate("has nodes", all(1 <= node <= len(weights) for node in input_nodes), equals=True)
@@ -68,21 +121,26 @@ class NetworkTopology:
         return self.__layers[index - 1]
 
     def number_of_layers(self) -> int:
+        self.validate_is_complete()
         return len(self.__layers)
 
     def number_of_nodes(self, layer: int) -> int:
+        self.validate_is_complete()
         weights = self.__get_layer(layer)
         return len(weights)
 
     def in_weights(self, layer: int, node: int) -> List[float]:
+        self.validate_is_complete()
         weights = self.__get_layer(layer)
         utils.validate("node", node, min_value=1, max_value=len(weights))
         return weights[node - 1]
 
     def number_of_exactly_one(self) -> int:
+        self.validate_is_complete()
         return len(self.__exactly_one)
 
     def nodes_in_exactly_one(self, index: int) -> List[int]:
+        self.validate_is_complete()
         utils.validate("index", index, min_value=0, max_value=len(self.__exactly_one) - 1)
         return list(self.__exactly_one[index])
 
@@ -94,18 +152,41 @@ class NetworkTopology:
     def layer_term(layer: int) -> str:
         return f"l{layer}"
 
+    @cached_property
+    def _network_facts(self) -> Model:
+        res = ["binary_input."]
+        for layer_index, _ in enumerate(range(self.number_of_layers()), start=1):
+            for node_index, _ in enumerate(range(self.number_of_nodes(layer=layer_index)), start=1):
+                weights = self.in_weights(layer=layer_index, node=node_index)
+                if weights:
+                    res.append(f"sub_type({self.term(layer_index, node_index)},"
+                               f"bias({self.layer_term(layer_index - 1)}),\"{weights[0]}\").")
+                    for weight_index, weight in enumerate(weights[1:], start=1):
+                        res.append(
+                            f"sub_type({self.term(layer_index, node_index)},"
+                            f"{self.term(layer_index - 1, weight_index)},\"{weight}\").")
+        for index in range(self.number_of_exactly_one()):
+            nodes = self.nodes_in_exactly_one(index)
+            res.append(f"exactly_one({index}).")
+            for node in nodes:
+                res.append(f"exactly_one({index},{self.term(1, node)}).")
+        return Model.of_program(res)
+
+    def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
+        for layer_index, _ in enumerate(range(1, self.number_of_layers()), start=2):
+            for node_index, _ in enumerate(range(self.number_of_nodes(layer=layer_index)), start=1):
+                propagator = ValPhiPropagator(self.term(layer_index, node_index), val_phi=val_phi)
+                control.register_propagator(propagator)
+
 
 @typeguard.typechecked
 @dataclasses.dataclass(frozen=True)
-class ArgumentationGraph:
+class ArgumentationGraph(NetworkInterface):
     __attacks: Set[Tuple[Any, Any, float]] = dataclasses.field(default_factory=set, init=False)
 
     @staticmethod
-    def parse(s: Union[str, List[str]]) -> Optional['ArgumentationGraph']:
-        if type(s) == str:
-            lines = [x.strip() for x in s.strip().split('\n')]
-        else:
-            lines = [x.strip() for x in s]
+    def parse_implementation(lines: List[str], key: Any) -> Optional['ArgumentationGraph']:
+        NetworkInterface.validate_parse_key(key)
         res = ArgumentationGraph()
         state = "init"
         for line in lines:
@@ -119,13 +200,11 @@ class ArgumentationGraph:
             if state == "attacks":
                 attacker, attacked, weight = line.split()
                 res.add_attack(int(attacker), int(attacked), float(weight))
-        return res
+        return res.complete()
 
-    def add_attack(self, attacker: int, attacked: int, weight: float):
+    def add_attack(self, attacker: int, attacked: int, weight: float) -> 'ArgumentationGraph':
         self.__attacks.add((attacker, attacked, weight))
-
-    def __iter__(self):
-        return iter(self.__attacks)
+        return self
 
     # def compute_attacks_received_by_each_argument(self) -> Dict[Any, List[Tuple[Any, float]]]:
     #     res = defaultdict(list)
@@ -133,34 +212,40 @@ class ArgumentationGraph:
     #         res[attacked].append((attacker, weight))
     #     return res
 
-    def compute_attacked(self) -> Set[Any]:
-        return set(attacked for (attacker, attacked, weight) in self)
+    @cached_property
+    def attacked(self) -> FrozenSet[Any]:
+        self.validate_is_complete()
+        return frozenset(attacked for (attacker, attacked, weight) in self.__attacks)
 
-    def compute_arguments(self) -> Set[Any]:
-        return set(attacker for (attacker, attacked, weight) in self).union(self.compute_attacked())
+    @cached_property
+    def arguments(self) -> FrozenSet[Any]:
+        self.validate_is_complete()
+        return frozenset(attacker for (attacker, attacked, weight) in self.__attacks).union(self.attacked)
 
     @staticmethod
     def term(node: int) -> str:
         return f"a{node}"
 
+    @cached_property
+    def _network_facts(self) -> Model:
+        return Model.of_program([
+            f"attack({self.term(attacker)}, {self.term(attacked)}, \"{weight}\")."
+            for (attacker, attacked, weight) in self.__attacks
+        ])
+
+    def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
+        for attacked in self.attacked:
+            control.register_propagator(ValPhiPropagator(self.term(attacked), val_phi=val_phi))
+
 
 @typeguard.typechecked
 @dataclasses.dataclass(frozen=True)
-class NetworkAspEncoding:
-    value: str
-
-
-@typeguard.typechecked
-@dataclasses.dataclass(frozen=True)
-class MaxSAT:
+class MaxSAT(NetworkInterface):
     __clauses: List[Tuple[int]] = dataclasses.field(default_factory=list, init=False)
 
     @staticmethod
-    def parse(s: Union[str, List[str]]) -> Optional['MaxSAT']:
-        if type(s) == str:
-            lines = [x.strip() for x in s.strip().split('\n')]
-        else:
-            lines = [x.strip() for x in s]
+    def parse_implementation(lines: List[str], key: Any) -> Optional['MaxSAT']:
+        NetworkInterface.validate_parse_key(key)
         res = MaxSAT()
         state = "init"
         for line in lines:
@@ -175,22 +260,24 @@ class MaxSAT:
                 continue
             if state == "clauses":
                 literals = [int(x) for x in line.split()]
-                validate("terminated by 0", literals[-1] == 0)
+                utils.validate("terminated by 0", literals[-1] == 0)
                 literals = literals[:-1]
                 res.add_clause(*literals)
-        return res
+        return res.complete()
 
-    def __len__(self):
+    @cached_property
+    def number_of_clauses(self):
+        self.validate_is_complete()
         return len(self.__clauses)
 
-    def __iter__(self):
-        return self.__clauses.__iter__()
-
-    def add_clause(self, *literals: int):
-        validate("cannot contain zero", any(x == 0 for x in literals), equals=False)
+    def add_clause(self, *literals: int) -> 'MaxSAT':
+        self.validate_is_not_complete()
+        utils.validate("cannot contain zero", any(x == 0 for x in literals), equals=False)
         self.__clauses.append(literals)
+        return self
 
     def serialize_clauses_as_facts(self) -> List[str]:
+        self.validate_is_complete()
         res = []
         for index, clause in enumerate(self.__clauses, start=1):
             res.append(f"clause(c({index})).")
@@ -201,7 +288,8 @@ class MaxSAT:
                     res.append(f"clause_negative_literal(c({index}), x{-literal}).")
         return res
 
-    def compute_network_facts(self) -> Model:
+    @cached_property
+    def _network_facts(self) -> Model:
         control = clingo.Control()
         control.add("base", ["max_value"], '\n'.join(self.serialize_clauses_as_facts()) + """
 atom(Atom) :- clause_positive_literal(Clause, Atom).
@@ -236,15 +324,21 @@ sub_type(even(I+1),even''(I+1),max_value) :- I = 0..max_value-1.
 #show.
 #show sub_type/3.
         """)
-        control.ground([("base", [clingo.Number(len(self))])])
+        control.ground([("base", [clingo.Number(self.number_of_clauses)])])
         model_collect = ModelCollect()
         control.solve(on_model=model_collect)
-        validate("one model", model_collect, length=1)
+        utils.validate("one model", model_collect, length=1)
         return model_collect[0]
 
-    @staticmethod
-    def compute_query() -> str:
+    @cached_property
+    def query(self) -> str:
+        self.validate_is_complete()
         return "sat#even(max_value)#1.0"
 
-    def compute_val_phi(self):
-        return [truth_degree * len(self) for truth_degree in range(len(self))]
+    @cached_property
+    def val_phi(self):
+        self.validate_is_complete()
+        return [truth_degree * self.number_of_clauses for truth_degree in range(self.number_of_clauses)]
+
+    def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
+        pass

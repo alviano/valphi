@@ -20,11 +20,15 @@ def read_query_from_file(filename):
 
 
 def read_network_from_file(filename):
-    return NetworkTopology.parse('\n'.join(read_example_file(f"{filename}.network")))
+    return NetworkTopology.parse(read_example_file(f"{filename}.network"))
 
 
 def read_graph_from_file(filename):
-    return ArgumentationGraph.parse('\n'.join(read_example_file(f"{filename}.graph")))
+    return ArgumentationGraph.parse(read_example_file(f"{filename}.graph"))
+
+
+def read_cnf_from_file(filename):
+    return MaxSAT.parse(read_example_file(f"{filename}.cnf"))
 
 
 @pytest.fixture
@@ -35,17 +39,8 @@ def two_layers_three_nodes_network():
         .add_node()\
         .add_exactly_one([1, 2])\
         .add_layer()\
-        .add_node([10, 20, -10])
-
-
-def test_network_topology_as_facts(two_layers_three_nodes_network):
-    facts = Controller.network_topology_as_facts(two_layers_three_nodes_network)
-    assert 'sub_type(l2_1,bias(l1),"10").' in facts
-    assert 'sub_type(l2_1,l1_1,"20").' in facts
-    assert 'sub_type(l2_1,l1_2,"-10").' in facts
-    assert 'exactly_one(0).' in facts
-    assert 'exactly_one(0,l1_1).' in facts
-    assert 'exactly_one(0,l1_1).' in facts
+        .add_node([10, 20, -10])\
+        .complete()
 
 
 def test_network_topology_output(two_layers_three_nodes_network):
@@ -82,6 +77,17 @@ def check_all_options_for_query(network, query):
     assert simple.query_true == wc.query_true
     assert simple.query_true == ordered.query_true
     assert simple.query_true == wc_ordered.query_true
+
+
+def check_all_options_for_max_sat(network, even):
+    # simple = Controller(network=network, use_wc=False, use_ordered_encoding=False).answer_query(query)
+    wc = Controller(network=network, use_wc=True, use_ordered_encoding=False, val_phi=network.val_phi)\
+        .answer_query("even")
+    # ordered = Controller(network=network, use_wc=False, use_ordered_encoding=True).answer_query(query)
+    wc_ordered = Controller(network=network, use_wc=True, use_ordered_encoding=True,
+                            val_phi=network.val_phi).answer_query("even")
+    assert wc.query_true == even
+    assert wc_ordered.query_true == even
 
 
 @pytest.fixture
@@ -146,12 +152,7 @@ p cnf 0 0
 -1 0
 -2 0
     """.strip())
-    wc = Controller(network=max_sat, use_wc=True, use_ordered_encoding=False, val_phi=max_sat.compute_val_phi())\
-        .answer_query("even")
-    wc_ordered = Controller(network=max_sat, use_wc=True, use_ordered_encoding=True, val_phi=max_sat.compute_val_phi())\
-        .answer_query("even")
-    assert wc.query_true
-    assert wc_ordered.query_true
+    check_all_options_for_max_sat(max_sat, even=True)
 
 
 def test_max_sat_odd():
@@ -161,9 +162,28 @@ p cnf 0 0
 -1 -3 0
 -2 -3 0
     """.strip())
-    wc = Controller(network=max_sat, use_wc=True, use_ordered_encoding=False, val_phi=max_sat.compute_val_phi())\
-        .answer_query("even")
-    wc_ordered = Controller(network=max_sat, use_wc=True, use_ordered_encoding=True, val_phi=max_sat.compute_val_phi())\
-        .answer_query("even")
-    assert not wc.query_true
-    assert not wc_ordered.query_true
+    check_all_options_for_max_sat(max_sat, even=False)
+
+
+def max_sat_odd_instances():
+    return [
+        read_cnf_from_file("php-4-1-odd"),
+        read_cnf_from_file("php-4-3-odd"),
+    ]
+
+
+def max_sat_even_instances():
+    return [
+        read_cnf_from_file("php-4-2-even"),
+    ]
+
+
+@pytest.mark.parametrize("instance", max_sat_odd_instances())
+def test_max_sat_odd(instance):
+    check_all_options_for_max_sat(instance, even=False)
+
+
+@pytest.mark.parametrize("instance", max_sat_even_instances())
+def test_max_sat_even(instance):
+    check_all_options_for_max_sat(instance, even=True)
+

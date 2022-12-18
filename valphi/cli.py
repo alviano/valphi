@@ -7,7 +7,7 @@ from rich.table import Table
 
 from valphi import utils
 from valphi.controllers import Controller
-from valphi.networks import NetworkTopology, ArgumentationGraph, MaxSAT
+from valphi.networks import NetworkTopology, ArgumentationGraph, MaxSAT, NetworkInterface
 from valphi.utils import console
 
 
@@ -100,16 +100,12 @@ def main(
 
     with open(network_filename) as f:
         network_filename_lines = f.readlines()
-        network = MaxSAT.parse(network_filename_lines)
-        if network is None:
-            network = ArgumentationGraph.parse(network_filename_lines)
-        if network is None:
-            network = NetworkTopology.parse(network_filename_lines)
+        network = NetworkInterface.parse(network_filename_lines)
 
     if type(network) is MaxSAT:
         utils.validate("val_phi cannot be changed for MaxSAT", val_phi_filename is None, equals=True)
         utils.validate("--wc is required by MaxSAT", wc, equals=True)
-        val_phi = network.compute_val_phi()
+        val_phi = network.val_phi
 
     controller = Controller(
         network=network,
@@ -148,7 +144,7 @@ def network_values_to_table(values: Dict, *, title: str = "") -> Table:
     elif type(network) is ArgumentationGraph:
         table.add_column("Node")
         table.add_column("Truth degree")
-        for node, _ in enumerate(network.compute_arguments(), start=1):
+        for node, _ in enumerate(network.arguments, start=1):
             table.add_row(
                 str(node),
                 str(values[network.term(node)] / app_options.controller.max_value),
