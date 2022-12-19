@@ -67,7 +67,7 @@ def main(
         #     "-n",
         #     help="Maximum value for truth degrees (use rational values 0/n ... n/n)",
         # ),
-        wc: bool = typer.Option(False, help="Use weight constraints instead of ad-hoc propagator"),
+        weight_constraints: bool = typer.Option(False, help="Use weight constraints instead of ad-hoc propagator"),
         ordered: bool = typer.Option(False, help="Add ordered encoding for eval/2"),
         debug: bool = typer.Option(False, "--debug", help="Don't minimize browser"),
 ):
@@ -111,7 +111,7 @@ def main(
         val_phi=val_phi,
         raw_code='\n'.join(lines),
         max_stable_models=number_of_solutions,
-        use_wc=wc,
+        use_wc=weight_constraints,
         use_ordered_encoding=ordered,
     )
 
