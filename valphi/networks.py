@@ -158,9 +158,11 @@ class NetworkTopology(NetworkInterface):
 
     @cached_property
     def _network_facts(self) -> Model:
-        res = ["binary_input."]
+        res = []
         for layer_index, _ in enumerate(range(self.number_of_layers()), start=1):
             for node_index, _ in enumerate(range(self.number_of_nodes(layer=layer_index)), start=1):
+                if layer_index == 1:
+                    res.append(f"crisp({self.term(layer_index, node_index)}).")
                 weights = self.in_weights(layer=layer_index, node=node_index)
                 if weights:
                     res.append(f"sub_type({self.term(layer_index, node_index)},"
@@ -232,7 +234,10 @@ class ArgumentationGraph(NetworkInterface):
 
     @cached_property
     def _network_facts(self) -> Model:
-        return Model.of_program([
+        return Model.of_program(["""
+            % weighted argumentation graphs are mapped to weighted typicality inclusions
+            sub_type(Attacked, Attacker, Weight) :- attack(Attacker, Attacked, Weight).
+        """] + [
             f"attack({self.term(attacker)}, {self.term(attacked)}, \"{weight}\")."
             for (attacker, attacked, weight) in self.__attacks
         ])
@@ -300,9 +305,10 @@ atom(Atom) :- clause_positive_literal(Clause, Atom).
 atom(Atom) :- clause_negative_literal(Clause, Atom).
 
 % boolean assignment
-sub_type(A,A, {max_value} + 1) :- atom(A).
+crisp(A) :- atom(A).   % sub_type(A,A, {max_value} + 1) :- atom(A).
 
 % clause satisfaction
+crisp(C) :- clause(C).
 sub_type(C,top,NegativeLiterals * {max_value}) :- clause(C), NegativeLiterals = #count{{A : clause_negative_literal(C,A)}}.
 sub_type(C,A,{max_value}) :- clause(C), clause_positive_literal(C,A).
 sub_type(C,A,-{max_value}) :- clause(C), clause_negative_literal(C,A).
@@ -311,21 +317,26 @@ sub_type(C,A,-{max_value}) :- clause(C), clause_negative_literal(C,A).
 sub_type(sat,C,1) :- clause(C).
 
 % even_0 is true
+crisp(even(0)).
 sub_type(even(0), top, {max_value}).
 
 % even'(i+1) = valphi(n * (1 - even_i + C(i+1) - 1)) = max(0, C(i+1) - even_i)   --- 1 if and only if ~even_i & C_i is true
+crisp(even'(I+1)) :- I = 0..{max_value}-1.
 sub_type(even'(I+1),even(I),-{max_value}) :- I = 0..{max_value}-1.
 sub_type(even'(I+1),c(I+1),{max_value}) :- I = 0..{max_value}-1.
 
 % even''(i+1) = valphi(n * (even_i + 1 - C(i+1) - 1)) = max(0, even_i - C(i+1))  --- 1 if and only even_i & ¬C_i is true
+crisp(even''(I+1)) :- I = 0..{max_value}-1.
 sub_type(even''(I+1),even(I),{max_value}) :- I = 0..{max_value}-1.
 sub_type(even''(I+1),c(I+1),-{max_value}) :- I = 0..{max_value}-1.
 
 % even(i+1) = valphi(n * (even'(i+1) + even''(i+1))) = min(1, even'(i+1) + even''(i+1))    --- 1 if and only even'(i+1) | even''(i+1) is true
+crisp(even(I+1)) :- I = 0..{max_value}-1.
 sub_type(even(I+1),even'(I+1),{max_value}) :- I = 0..{max_value}-1.
 sub_type(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_value}-1.
 
 #show.
+#show crisp/1.
 #show sub_type/3.
         """])
 

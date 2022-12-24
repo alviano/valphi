@@ -50,6 +50,7 @@ class Model:
     def __iter__(self):
         return self.__value.__iter__()
 
+    @property
     def as_strings(self) -> Tuple[str, ...]:
         return tuple(f"{atom}." for atom in self.__value)
 

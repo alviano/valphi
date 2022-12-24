@@ -44,7 +44,7 @@ class Controller:
                     + (QUERY_ENCODING if query and not self.use_ordered_encoding else "")
                     + (QUERY_ORDERED_ENCODING if query and self.use_ordered_encoding else "")
                     + (ORDERED_ENCODING if self.use_ordered_encoding else "")
-                    + '\n'.join(self.network.network_facts.as_strings())
+                    + '\n'.join(self.network.network_facts.as_strings)
                     + self.raw_code + ("" if query is None else f"query({query})."))
         control.ground([("base", [Number(self.max_value)])], context=Context())
         if self.use_wc:
@@ -119,9 +119,6 @@ BASE_PROGRAM: Final = """
 % let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
 val(0..max_value).
 
-% weighted argumentation graphs are mapped to weighted typicality inclusions
-sub_type(Attacked, Attacker, Weight) :- attack(Attacker, Attacked, Weight).
-
 % classes from the network topology
 class(C) :- sub_type(C,_,_).
 class(C) :- sub_type(_,C,_).
@@ -130,13 +127,9 @@ class(C) :- sub_type(_,C,_).
 class(top).
 eval(top,max_value).
 
-% inputs have binary values
-{eval(C,0); eval(C,max_value)} = 1 :- binary_input; class(C), not sub_type(C,_,_); C != top.
-% or possibly not!
-{eval(C,V) : val(V)} = 1 :- not binary_input; class(C), not sub_type(C,_,_); C != top.
-
-% other classes take some value
-{eval(C,V) : val(V)} = 1 :- class(C), sub_type(C,_,_), C != top.
+% guess evaluation
+{eval(C,0); eval(C,max_value)} = 1 :- class(C), crisp(C), C != top.
+{eval(C,V) : val(V)} = 1 :- class(C), not crisp(C), C != top.
 
 % all relevant concept for the query
 concept(impl(C,D)) :- query(C,D,_).
@@ -164,7 +157,7 @@ eval(impl(A,B), @godel_implication(V1,V2, max_value))
 #show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) =  1.
 
 % prevent these warnings
-binary_input :- #false.
+crisp(0) :- #false.
 attack(0,0,0) :- #false.
 exactly_one(0) :- #false.
 exactly_one(0,0) :- #false.
