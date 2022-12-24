@@ -164,7 +164,7 @@ class NetworkTopology(NetworkInterface):
                 weights = self.in_weights(layer=layer_index, node=node_index)
                 if weights:
                     res.append(f"sub_type({self.term(layer_index, node_index)},"
-                               f"bias({self.layer_term(layer_index - 1)}),\"{weights[0]}\").")
+                               f"top,\"{weights[0]}\").")
                     for weight_index, weight in enumerate(weights[1:], start=1):
                         res.append(
                             f"sub_type({self.term(layer_index, node_index)},"
@@ -303,7 +303,7 @@ atom(Atom) :- clause_negative_literal(Clause, Atom).
 sub_type(A,A, {max_value} + 1) :- atom(A).
 
 % clause satisfaction
-sub_type(C,bias(C),NegativeLiterals * {max_value}) :- clause(C), NegativeLiterals = #count{{A : clause_negative_literal(C,A)}}.
+sub_type(C,top,NegativeLiterals * {max_value}) :- clause(C), NegativeLiterals = #count{{A : clause_negative_literal(C,A)}}.
 sub_type(C,A,{max_value}) :- clause(C), clause_positive_literal(C,A).
 sub_type(C,A,-{max_value}) :- clause(C), clause_negative_literal(C,A).
 
@@ -311,7 +311,7 @@ sub_type(C,A,-{max_value}) :- clause(C), clause_negative_literal(C,A).
 sub_type(sat,C,1) :- clause(C).
 
 % even_0 is true
-sub_type(even(0), bias(even(0)), {max_value}).
+sub_type(even(0), top, {max_value}).
 
 % even'(i+1) = valphi(n * (1 - even_i + C(i+1) - 1)) = max(0, C(i+1) - even_i)   --- 1 if and only if ~even_i & C_i is true
 sub_type(even'(I+1),even(I),-{max_value}) :- I = 0..{max_value}-1.

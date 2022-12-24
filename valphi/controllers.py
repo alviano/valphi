@@ -40,7 +40,10 @@ class Controller:
         # control = clingo.Control(["--opt-strategy=usc,k,4", "--opt-usc-shrink=rgs"] if query else [])
         control = clingo.Control()
         control.configuration.solve.models = self.max_stable_models if query is None else 0
-        control.add("base", ["max_value"], BASE_PROGRAM + (ORDERED_ENCODING if self.use_ordered_encoding else "")
+        control.add("base", ["max_value"], BASE_PROGRAM
+                    + (QUERY_ENCODING if query and not self.use_ordered_encoding else "")
+                    + (QUERY_ORDERED_ENCODING if query and self.use_ordered_encoding else "")
+                    + (ORDERED_ENCODING if self.use_ordered_encoding else "")
                     + '\n'.join(self.network.network_facts.as_strings())
                     + self.raw_code + ("" if query is None else f"query({query})."))
         control.ground([("base", [Number(self.max_value)])], context=Context())
@@ -57,7 +60,7 @@ class Controller:
         for symbol in model:
             if symbol.name == "eval":
                 concept, value = symbol.arguments
-                if concept.name == "bias":
+                if concept.name == "top":
                     continue
                 if type(self.network) is NetworkTopology:
                     layer, node = concept.name[1:].split('_', maxsplit=1)
@@ -116,27 +119,27 @@ BASE_PROGRAM: Final = """
 % let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
 val(0..max_value).
 
+% weighted argumentation graphs are mapped to weighted typicality inclusions
 sub_type(Attacked, Attacker, Weight) :- attack(Attacker, Attacked, Weight).
-
 
 % classes from the network topology
 class(C) :- sub_type(C,_,_).
 class(C) :- sub_type(_,C,_).
 
-% inputs have binary values (biases fixed to max_value)
-{eval(C,0); eval(C,max_value)} = 1 :- binary_input; class(C), not sub_type(C,_,_); C != bias(ID) : class(bias(ID)).
-eval(bias(ID),max_value) :- class(bias(ID)), not sub_type(bias(ID),_,_).
+% top class contains everything
+class(top).
+eval(top,max_value).
+
+% inputs have binary values
+{eval(C,0); eval(C,max_value)} = 1 :- binary_input; class(C), not sub_type(C,_,_); C != top.
 % or possibly not!
-{eval(C,V) : val(V)} = 1 :- not binary_input; class(C), not sub_type(C,_,_); C != bias(ID) : class(bias(ID)).
+{eval(C,V) : val(V)} = 1 :- not binary_input; class(C), not sub_type(C,_,_); C != top.
 
 % other classes take some value
-{eval(C,V) : val(V)} = 1 :- class(C), sub_type(C,_,_).
-
+{eval(C,V) : val(V)} = 1 :- class(C), sub_type(C,_,_), C != top.
 
 % all relevant concept for the query
 concept(impl(C,D)) :- query(C,D,_).
-% concept(C) :- query(C,D,_).
-% concept(D) :- query(C,D,_).
 concept(A) :- concept(and(A,B)).
 concept(B) :- concept(and(A,B)).
 concept(A) :- concept(or(A,B)).
@@ -152,22 +155,13 @@ eval(neg(A),  max_value-V1) :- concept(neg(A)),   eval(A,V1).
 eval(impl(A,B), @godel_implication(V1,V2, max_value))
                             :- concept(impl(A,B)), eval(A,V1), eval(B,V2).
 
-% find the largest truth degree for the left-hand-side concept of query 
-:~ query(C,_,_), eval(C,V). [-1@V+2, C,V]
-
-% verify if there is a counterexample for the right-hand-side concept of the query
-:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
-% :~ query(_,D,Alpha), eval(D,V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
-
-#show.
-#show eval(C,V) : eval(C,V), class(C).
-#show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) != 1.
-#show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) =  1.
-% #show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) != 1.
-% #show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(D,VD), @lt(VD,max_value, Alpha) =  1.
-
 % support exactly-one constraints encoded as exactly_one(ID). exactly_one(ID,Concept). ... exactly_one(ID,Concept).
 :- exactly_one(ID), #count{Concept : exactly_one(ID,Concept), eval(Concept,max_value)} != 1.
+
+#show.
+#show eval(C,V) : eval(C,V), class(C), C != top.
+#show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) != 1.
+#show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) =  1.
 
 % prevent these warnings
 binary_input :- #false.
@@ -175,6 +169,22 @@ attack(0,0,0) :- #false.
 exactly_one(0) :- #false.
 exactly_one(0,0) :- #false.
 query(0,0,0) :- #false.
+"""
+
+QUERY_ENCODING: Final = """
+% find the largest truth degree for the left-hand-side concept of query 
+:~ query(C,_,_), eval(C,V). [-1@V+2, C,V]
+
+% verify if there is a counterexample for the right-hand-side concept of the query
+:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
+"""
+
+QUERY_ORDERED_ENCODING: Final = """
+% find the largest truth degree for the left-hand-side concept of query 
+:~ query(C,_,_), eval_ge(C,V). [-1@2, C,V]
+
+% verify if there is a counterexample for the right-hand-side concept of the query
+:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
 """
 
 ORDERED_ENCODING: Final = """

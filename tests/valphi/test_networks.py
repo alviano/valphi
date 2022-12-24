@@ -52,7 +52,7 @@ def test_parse_network_with_exactly_one():
 
 def test_network_topology_as_facts():
     facts = two_layers_three_nodes_network(with_exactly_one=True).network_facts.as_strings()
-    assert 'sub_type(l2_1,bias(l1),"10").' in facts
+    assert 'sub_type(l2_1,top,"10").' in facts
     assert 'sub_type(l2_1,l1_1,"20").' in facts
     assert 'sub_type(l2_1,l1_2,"-10").' in facts
     assert 'exactly_one(0).' in facts
@@ -77,9 +77,9 @@ def test_max_sat_one_clause():
         'sub_type(c(1),x1,1)',
         'sub_type(c(1),x2,1)',
         'sub_type(c(1),x3,-1)',
-        'sub_type(c(1),bias(c(1)),1)',
+        'sub_type(c(1),top,1)',
         "sub_type(sat,c(1),1)",
-        'sub_type(even(0),bias(even(0)),1)',
+        'sub_type(even(0),top,1)',
         "sub_type(even(1),even'(1),1)",
         "sub_type(even(1),even''(1),1)",
         "sub_type(even'(1),c(1),1)",
