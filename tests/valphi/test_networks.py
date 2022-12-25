@@ -56,8 +56,8 @@ def test_network_topology_as_facts():
     assert 'sub_type(l2_1,l1_1,"20").' in facts
     assert 'sub_type(l2_1,l1_2,"-10").' in facts
     assert 'exactly_one(0).' in facts
-    assert 'exactly_one(0,l1_1).' in facts
-    assert 'exactly_one(0,l1_1).' in facts
+    assert 'exactly_one_element(0,l1_1).' in facts
+    assert 'exactly_one_element(0,l1_1).' in facts
 
 
 def test_max_sat_one_clause():

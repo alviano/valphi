@@ -175,7 +175,7 @@ class NetworkTopology(NetworkInterface):
             nodes = self.nodes_in_exactly_one(index)
             res.append(f"exactly_one({index}).")
             for node in nodes:
-                res.append(f"exactly_one({index},{self.term(1, node)}).")
+                res.append(f"exactly_one_element({index},{self.term(1, node)}).")
         return Model.of_program(res)
 
     def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
@@ -351,7 +351,7 @@ sub_type(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_value}-1.
         return [truth_degree * self.number_of_clauses for truth_degree in range(self.number_of_clauses)]
 
     def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
-        output_nodes = Model.of_program(self.network_facts.as_strings() + ("""
+        output_nodes = Model.of_program(self.network_facts.as_strings + ("""
 #show.
 #show Node : sub_type(Node,_,_).
         """,))

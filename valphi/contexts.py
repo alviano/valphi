@@ -6,6 +6,12 @@ from valphi.utils import validate
 
 class Context:
     @staticmethod
+    def is_named_concept(term):
+        if term.type == clingo.SymbolType.Function and term.name not in ["top", "bot", "and", "or", "neg", "impl"]:
+            return Number(1)
+        return Number(0)
+
+    @staticmethod
     def str_to_int(s):
         if s.type == clingo.SymbolType.Number:
             return s

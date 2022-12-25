@@ -104,10 +104,10 @@ class Controller:
                                 eval_values=None)
 
     def __generate_wc(self):
-        res = [f"val_phi(0,none,{self.val_phi[0]})."]
+        res = [f"val_phi(0,#inf,{self.val_phi[0]})."]
         for value in range(len(self.val_phi) - 1):
             res.append(f"val_phi({value + 1},{self.val_phi[value]},{self.val_phi[value + 1]}).")
-        res.append(f"val_phi({len(self.val_phi)},{self.val_phi[-1]},none).")
+        res.append(f"val_phi({len(self.val_phi)},{self.val_phi[-1]},#sup).")
         if self.use_ordered_encoding:
             res.append(WC_ORDERED_ENCODING)
         else:
@@ -119,19 +119,23 @@ BASE_PROGRAM: Final = """
 % let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
 val(0..max_value).
 
-% classes from the network topology
-class(C) :- sub_type(C,_,_).
-class(C) :- sub_type(_,C,_).
+% concepts from the network topology
+concept(C) :- sub_type(C,_,_).
+concept(C) :- sub_type(_,C,_).
 
 % top class contains everything
-class(top).
+concept(top).
 eval(top,max_value).
 
-% guess evaluation
-{eval(C,0); eval(C,max_value)} = 1 :- class(C), crisp(C), C != top.
-{eval(C,V) : val(V)} = 1 :- class(C), not crisp(C), C != top.
+% bot class contains nothing
+concept(bot).
+eval(bot,0).
 
-% all relevant concept for the query
+% guess evaluation
+{eval(C,0); eval(C,max_value)} = 1 :- concept(C), @is_named_concept(C) = 1, crisp(C).
+{eval(C,V) : val(V)} = 1 :- concept(C), @is_named_concept(C) = 1, not crisp(C).
+
+% all relevant concepts for the query
 concept(impl(C,D)) :- query(C,D,_).
 concept(A) :- concept(and(A,B)).
 concept(B) :- concept(and(A,B)).
@@ -148,11 +152,11 @@ eval(neg(A),  max_value-V1) :- concept(neg(A)),   eval(A,V1).
 eval(impl(A,B), @godel_implication(V1,V2, max_value))
                             :- concept(impl(A,B)), eval(A,V1), eval(B,V2).
 
-% support exactly-one constraints encoded as exactly_one(ID). exactly_one(ID,Concept). ... exactly_one(ID,Concept).
-:- exactly_one(ID), #count{Concept : exactly_one(ID,Concept), eval(Concept,max_value)} != 1.
+% support exactly-one constraints encoded as exactly_one(ID). exactly_one_element(ID,Concept). ... exactly_one_element(ID,Concept).
+:- exactly_one(ID), #count{Concept : exactly_one_element(ID,Concept), eval(Concept,max_value)} != 1.
 
 #show.
-#show eval(C,V) : eval(C,V), class(C), C != top.
+#show eval(C,V) : eval(C,V), concept(C), @is_named_concept(C) = 1.
 #show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) != 1.
 #show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) =  1.
 
@@ -160,16 +164,16 @@ eval(impl(A,B), @godel_implication(V1,V2, max_value))
 crisp(0) :- #false.
 attack(0,0,0) :- #false.
 exactly_one(0) :- #false.
-exactly_one(0,0) :- #false.
+exactly_one_element(0,0) :- #false.
 query(0,0,0) :- #false.
 """
 
 QUERY_ENCODING: Final = """
 % find the largest truth degree for the left-hand-side concept of query 
-:~ query(C,_,_), eval(C,V). [-1@V+2, C,V]
+:~ query(C,_,_), eval(C,V), V > 0. [-1@V+1, C,V]
 
 % verify if there is a counterexample for the right-hand-side concept of the query
-:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
+:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, C,D,Alpha,V] 
 """
 
 QUERY_ORDERED_ENCODING: Final = """
@@ -177,18 +181,15 @@ QUERY_ORDERED_ENCODING: Final = """
 :~ query(C,_,_), eval_ge(C,V). [-1@2, C,V]
 
 % verify if there is a counterexample for the right-hand-side concept of the query
-:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, D,Alpha,V] 
+:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, C,D,Alpha,V] 
 """
 
 ORDERED_ENCODING: Final = """
-concept_or_class(C) :- class(C).
-concept_or_class(C) :- concept(C).
-
-{eval_ge(C,V) : val(V), V > 0} :- concept_or_class(C).
+{eval_ge(C,V) : val(V), V > 0} :- concept(C).
 :- eval_ge(C,V), V > 1, not eval_ge(C,V-1).
-:- concept_or_class(C), eval(C,V), V > 0, not eval_ge(C,V).
-:- concept_or_class(C), eval_ge(C,V), not eval_ge(C,V+1), not eval(C,V).
-:- concept_or_class(C), not eval_ge(C,1), not eval(C,0).
+:- concept(C), eval(C,V), V > 0, not eval_ge(C,V).
+:- concept(C), eval_ge(C,V), not eval_ge(C,V+1), not eval(C,V).
+:- concept(C), not eval_ge(C,1), not eval(C,0).
 
 % A&B>=V <=> A>=V and B>=V 
 :- concept(and(A,B)), eval_ge(and(A,B),V); not eval_ge(A,V).
@@ -215,83 +216,45 @@ premise_greater_than_conclusion(A,B) :-
 """
 
 WC_ENCODING: Final = """
-:- val(V), V > 0, V < max_value; val_phi(V,LB,UB);
+:- val(V), val_phi(V,LB,UB);
    sub_type(C,_,_);
    LB < #sum{
        @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
    } <= UB;
    not eval(C,V).
-:- val(V), V > 0, V < max_value; val_phi(V,LB,UB);
+:- val(V), val_phi(V,LB,UB);
    sub_type(C,_,_);
    not LB < #sum{
        @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
    } <= UB;
-   eval(C,V).
-
-:- val(V), V = 0; val_phi(V,LB,UB);
-   sub_type(C,_,_);
-   #sum{
-       @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
-   } <= UB;
-   not eval(C,V).
-:- val(V), V = 0; val_phi(V,LB,UB);
-   sub_type(C,_,_);
-   not #sum{
-       @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
-   } <= UB;
-   eval(C,V).
-
-:- val(V), V = max_value; val_phi(V,LB,UB);
-   sub_type(C,_,_);
-   LB < #sum{
-       @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
-   };
-   not eval(C,V).
-:- val(V), V = max_value; val_phi(V,LB,UB);
-   sub_type(C,_,_);
-   not LB < #sum{
-       @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
-   };
    eval(C,V).
 """
 
+# WC_ORDERED_ENCODING: Final = """
+# :- val(V), val_phi(V,LB,UB);
+#    sub_type(C,_,_);
+#    LB < #sum{
+#        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
+#    } <= UB;
+#    not eval(C,V).
+# :- val(V), val_phi(V,LB,UB);
+#    sub_type(C,_,_);
+#    not LB < #sum{
+#        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
+#    } <= UB;
+#    eval(C,V).
+# """
 WC_ORDERED_ENCODING: Final = """
-:- val(V), V > 0, V < max_value; val_phi(V,LB,UB);
-   sub_type(C,_,_);
-   LB < #sum{
-       @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
-   } <= UB;
-   not eval(C,V).
-:- val(V), V > 0, V < max_value; val_phi(V,LB,UB);
-   sub_type(C,_,_);
-   not LB < #sum{
-       @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
-   } <= UB;
-   eval(C,V).
-
-:- val(V), V = 0; val_phi(V,LB,UB);
+:- val(V), V > 0, val_phi(V,LB,UB);
    sub_type(C,_,_);
    #sum{
        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
-   } <= UB;
-   not eval(C,V).
-:- val(V), V = 0; val_phi(V,LB,UB);
+   } > LB;
+   not eval_ge(C,V).
+:- val(V), V > 0, val_phi(V,LB,UB);
    sub_type(C,_,_);
    not #sum{
        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
-   } <= UB;
-   eval(C,V).
-
-:- val(V), V = max_value; val_phi(V,LB,UB);
-   sub_type(C,_,_);
-   LB < #sum{
-       @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
-   };
-   not eval(C,V).
-:- val(V), V = max_value; val_phi(V,LB,UB);
-   sub_type(C,_,_);
-   not LB < #sum{
-       @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
-   };
-   eval(C,V).
+   } > LB;
+   eval_ge(C,V).
 """
