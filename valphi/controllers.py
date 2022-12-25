@@ -131,9 +131,10 @@ eval(top,max_value).
 concept(bot).
 eval(bot,0).
 
-% guess evaluation
-{eval(C,0); eval(C,max_value)} = 1 :- concept(C), @is_named_concept(C) = 1, crisp(C).
+% guess evaluation (optimize for crisp concepts)
 {eval(C,V) : val(V)} = 1 :- concept(C), @is_named_concept(C) = 1, not crisp(C).
+{eval(C,0); eval(C,max_value)} = 1 :- concept(C), @is_named_concept(C) = 1, crisp(C).
+:- concept(C), @is_named_concept(C) != 1, crisp(C); not eval(C,0), not eval(C,max_value).
 
 % all relevant concepts for the query
 concept(impl(C,D)) :- query(C,D,_).
@@ -157,8 +158,8 @@ eval(impl(A,B), @godel_implication(V1,V2, max_value))
 
 #show.
 #show eval(C,V) : eval(C,V), concept(C), @is_named_concept(C) = 1.
-#show query_true (VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) != 1.
-#show query_false(VC,VD) : query(C,D,Alpha), eval(C,VC), eval(impl(C,D),VD), @lt(VD,max_value, Alpha) =  1.
+#show query_true (V,V') : query(C,D,Alpha), eval(C,V), eval(impl(C,D),V'), @lt(V',max_value, Alpha) != 1.
+#show query_false(V,V') : query(C,D,Alpha), eval(C,V), eval(impl(C,D),V'), @lt(V',max_value, Alpha) =  1.
 
 % prevent these warnings
 crisp(0) :- #false.
