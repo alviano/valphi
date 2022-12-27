@@ -59,8 +59,8 @@ class Controller:
         res = {}
         for symbol in model:
             if symbol.name == "eval":
-                concept, value = symbol.arguments
-                if concept.name == "top":
+                concept, individual, value = symbol.arguments
+                if concept.name in ["top", "bot"]:
                     continue
                 if type(self.network) is NetworkTopology:
                     layer, node = concept.name[1:].split('_', maxsplit=1)
@@ -119,6 +119,9 @@ BASE_PROGRAM: Final = """
 % let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
 truth_degree(0..max_value).
 
+% anonymous individual (to enforce nonempty set of individuals)
+individual(anonymous).
+
 % concepts from weighted typicality inclusions
 concept(C) :- weighted_typicality_inclusion(C,_,_).
 concept(C) :- weighted_typicality_inclusion(_,C,_).
@@ -140,132 +143,135 @@ concept(B) :- concept(impl(A,B)).
 
 % top class contains everything
 concept(top).
-eval(top,max_value).
+eval(top,X,max_value) :- individual(X).
 
 % bot class contains nothing
 concept(bot).
-eval(bot,0).
+eval(bot,X,0) :- individual(X).
 
 % guess evaluation (optimize for crisp concepts)
-{eval(C,V) : truth_degree(V)} = 1 :- concept(C), @is_named_concept(C) = 1, not crisp(C).
-{eval(C,0); eval(C,max_value)} = 1 :- concept(C), @is_named_concept(C) = 1, crisp(C).
-:- concept(C), @is_named_concept(C) != 1, crisp(C); not eval(C,0), not eval(C,max_value).
+{eval(C,X,V) : truth_degree(V)} = 1 :- concept(C), individual(X), @is_named_concept(C) = 1, not crisp(C).
+{eval(C,X,0); eval(C,X,max_value)} = 1 :- concept(C), individual(X), @is_named_concept(C) = 1, crisp(C).
+:- concept(C), @is_named_concept(C) != 1, crisp(C); individual(X), not eval(C,X,0), not eval(C,X,max_value).
 
 % Godel evaluation of complex concepts
-eval(and(A,B),@min(V1,V2))  :- concept(and(A,B)), eval(A,V1), eval(B,V2).
-eval( or(A,B),@max(V1,V2))  :- concept( or(A,B)), eval(A,V1), eval(B,V2).
-eval(neg(A),  max_value-V1) :- concept(neg(A)),   eval(A,V1).
-eval(impl(A,B), @implication(V1,V2, max_value))
-                            :- concept(impl(A,B)), eval(A,V1), eval(B,V2).
+eval(and(A,B), X, @min(V1,V2))  :- concept(and(A,B)), individual(X), eval(A,X,V1), eval(B,X,V2).
+eval( or(A,B), X, @max(V1,V2))  :- concept( or(A,B)), individual(X), eval(A,X,V1), eval(B,X,V2).
+eval(neg(A),   X, max_value-V1) :- concept(neg(A)),   individual(X), eval(A,X,V1).
+eval(impl(A,B),X, @implication(V1,V2, max_value))
+    :- concept(impl(A,B)), individual(X), eval(A,X,V1), eval(B,X,V2).
 
 % TBox axioms
-:- concept_inclusion(C,D,LowerBound); eval(impl(C,D),V), @lt(V,max_value, LowerBound) = 1.
+:- concept_inclusion(C,D,LowerBound); eval(impl(C,D),X,V), @lt(V,max_value, LowerBound) = 1.
+:- assertion(C,X,LowerBound); eval(C,X,V), @lt(V,max_value, LowerBound) = 1.
 
 % support exactly-one constraints encoded as exactly_one(ID). exactly_one_element(ID,Concept). ... exactly_one_element(ID,Concept).
-:- exactly_one(ID), #count{Concept : exactly_one_element(ID,Concept), eval(Concept,max_value)} != 1.
+:- exactly_one(ID), individual(X), #count{Concept : exactly_one_element(ID,Concept), eval(Concept,X,max_value)} != 1.
 
 #show.
-#show eval(C,V) : eval(C,V), concept(C), @is_named_concept(C) = 1.
-#show query_true (V,V') : query(C,D,Alpha), eval(C,V), eval(impl(C,D),V'), @lt(V',max_value, Alpha) != 1.
-#show query_false(V,V') : query(C,D,Alpha), eval(C,V), eval(impl(C,D),V'), @lt(V',max_value, Alpha) =  1.
+#show eval(C,X,V) : eval(C,X,V), concept(C), @is_named_concept(C) = 1.
+#show query_true (V,V') : query(C,D,Alpha), eval(C,X,V), eval(impl(C,D),X,V'), @lt(V',max_value, Alpha) != 1.
+#show query_false(V,V') : query(C,D,Alpha), eval(C,X,V), eval(impl(C,D),X,V'), @lt(V',max_value, Alpha) =  1.
 
 % prevent these warnings
+individual(0) :- #false.
 crisp(0) :- #false.
 attack(0,0,0) :- #false.
 exactly_one(0) :- #false.
 exactly_one_element(0,0) :- #false.
 query(0,0,0) :- #false.
 concept_inclusion(0,0,0) :- #false.
+assertion(0,0,0) :- #false.
 weighted_typicality_inclusion(0,0,0) :- #false.
 """
 
 QUERY_ENCODING: Final = """
 % find the largest truth degree for the left-hand-side concept of query 
-:~ query(C,_,_), eval(C,V), V > 0. [-1@V+1, C,V]
+:~ query(C,_,_), eval(C,X,V), V > 0. [-1@V+1, C,X,V]
 
 % verify if there is a counterexample for the right-hand-side concept of the query
-:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, C,D,Alpha,V] 
+:~ query(C,D,Alpha), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1. [-1@1, C,D,X,Alpha,V] 
 """
 
 QUERY_ORDERED_ENCODING: Final = """
 % find the largest truth degree for the left-hand-side concept of query 
-:~ query(C,_,_), eval_ge(C,V). [-1@2, C,V]
+:~ query(C,_,_), eval_ge(C,X,V). [-1@2, C,X,V]
 
 % verify if there is a counterexample for the right-hand-side concept of the query
-:~ query(C,D,Alpha), eval(impl(C,D),V), @lt(V,max_value, Alpha) = 1. [-1@1, C,D,Alpha,V] 
+:~ query(C,D,Alpha), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1. [-1@1, C,D,X,Alpha,V] 
 """
 
 ORDERED_ENCODING: Final = """
-{eval_ge(C,V) : truth_degree(V), V > 0} :- concept(C).
-:- eval_ge(C,V), V > 1, not eval_ge(C,V-1).
-:- concept(C), eval(C,V), V > 0, not eval_ge(C,V).
-:- concept(C), eval_ge(C,V), not eval_ge(C,V+1), not eval(C,V).
-:- concept(C), not eval_ge(C,1), not eval(C,0).
+{eval_ge(C,X,V) : truth_degree(V), V > 0} :- concept(C), individual(X).
+:- eval_ge(C,X,V), V > 1, not eval_ge(C,X,V-1).
+:- concept(C), individual(X), eval(C,X,V), V > 0, not eval_ge(C,X,V).
+:- concept(C), individual(X), eval_ge(C,X,V), not eval_ge(C,X,V+1), not eval(C,X,V).
+:- concept(C), individual(X), not eval_ge(C,X,1), not eval(C,X,0).
 
 % A&B>=V <=> A>=V and B>=V 
-:- concept(and(A,B)), eval_ge(and(A,B),V); not eval_ge(A,V).
-:- concept(and(A,B)), eval_ge(and(A,B),V); not eval_ge(B,V).
-:- concept(and(A,B)), eval_ge(A,V), eval_ge(B,V); not eval_ge(and(A,B),V).
+:- concept(and(A,B)), individual(X), eval_ge(and(A,B),X,V); not eval_ge(A,X,V).
+:- concept(and(A,B)), individual(X), eval_ge(and(A,B),X,V); not eval_ge(B,X,V).
+:- concept(and(A,B)), individual(X), eval_ge(A,X,V), eval_ge(B,X,V); not eval_ge(and(A,B),X,V).
 
 % A|B>=V <=> A>=V or B>=V
-:- concept(or(A,B)), eval_ge(or(A,B),V); not eval_ge(A,V), not eval_ge(B,V).
-:- concept(or(A,B)), eval_ge(A,V); not eval_ge(or(A,B),V).
-:- concept(or(A,B)), eval_ge(B,V); not eval_ge(or(A,B),V).
+:- concept(or(A,B)), individual(X), eval_ge(or(A,B),X,V); not eval_ge(A,X,V), not eval_ge(B,X,V).
+:- concept(or(A,B)), individual(X), eval_ge(A,X,V); not eval_ge(or(A,B),X,V).
+:- concept(or(A,B)), individual(X), eval_ge(B,X,V); not eval_ge(or(A,B),X,V).
 
 % ¬A>=V <=> A<=max_value-V
-:- concept(neg(A)); eval_ge(neg(A),V); eval_ge(A,max_value-V+1).
-:- concept(neg(A)), truth_degree(V), V > 0; not eval_ge(A,max_value-V+1); not eval_ge(neg(A),V).
+:- concept(neg(A)), individual(X); eval_ge(neg(A),X,V); eval_ge(A,X,max_value-V+1).
+:- concept(neg(A)), individual(X), truth_degree(V), V > 0; not eval_ge(A,X,max_value-V+1); not eval_ge(neg(A),X,V).
 
 % A->B>=V <=> A<=B or B>=V
-premise_greater_than_conclusion(A,B) :-
-    concept(impl(A,B));
-    eval_ge(A,V);
-    not eval_ge(B,V).
-:- concept(impl(A,B)); eval_ge(impl(A,B),V); premise_greater_than_conclusion(A,B); not eval_ge(B,V).
-:- concept(impl(A,B)), truth_degree(V), V > 0; not premise_greater_than_conclusion(A,B); not eval_ge(impl(A,B),V).
-:- concept(impl(A,B)); eval_ge(B,V); not eval_ge(impl(A,B),V).
+premise_greater_than_conclusion(A,B,X) :-
+    concept(impl(A,B)), individual(X);
+    eval_ge(A,X,V);
+    not eval_ge(B,X,V).
+:- concept(impl(A,B)), individual(X); eval_ge(impl(A,B),X,V); premise_greater_than_conclusion(A,B,X); not eval_ge(B,X,V).
+:- concept(impl(A,B)), individual(X), truth_degree(V), V > 0; not premise_greater_than_conclusion(A,B,X); not eval_ge(impl(A,B),X,V).
+:- concept(impl(A,B)), individual(X); eval_ge(B,X,V); not eval_ge(impl(A,B),X,V).
 """
 
 WC_ENCODING: Final = """
 :- truth_degree(V), val_phi(V,LB,UB);
-   weighted_typicality_inclusion(C,_,_);
+   weighted_typicality_inclusion(C,_,_), individual(X);
    LB < #sum{
-       @str_to_int(W) * VD,D,VD : weighted_typicality_inclusion(C,D,W), eval(D,VD), VD > 0
+       @str_to_int(W) * VD,D,VD : weighted_typicality_inclusion(C,D,W), eval(D,X,VD), VD > 0
    } <= UB;
-   not eval(C,V).
+   not eval(C,X,V).
 :- truth_degree(V), val_phi(V,LB,UB);
-   weighted_typicality_inclusion(C,_,_);
+   weighted_typicality_inclusion(C,_,_), individual(X);
    not LB < #sum{
-       @str_to_int(W) * VD,D,VD : weighted_typicality_inclusion(C,D,W), eval(D,VD), VD > 0
+       @str_to_int(W) * VD,D,VD : weighted_typicality_inclusion(C,D,W), eval(D,X,VD), VD > 0
    } <= UB;
-   eval(C,V).
+   eval(C,X,V).
 """
 
 # WC_ORDERED_ENCODING: Final = """
 # :- truth_degree(V), val_phi(V,LB,UB);
-#    weighted_typicality_inclusion(C,_,_);
+#    weighted_typicality_inclusion(C,_,_), individual(X);
 #    LB < #sum{
-#        @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,VD)
+#        @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,X,VD)
 #    } <= UB;
-#    not eval(C,V).
+#    not eval(C,X,V).
 # :- truth_degree(V), val_phi(V,LB,UB);
-#    weighted_typicality_inclusion(C,_,_);
+#    weighted_typicality_inclusion(C,_,_), individual(X);
 #    not LB < #sum{
-#        @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,VD)
+#        @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,X,VD)
 #    } <= UB;
-#    eval(C,V).
+#    eval(C,X,V).
 # """
 WC_ORDERED_ENCODING: Final = """
 :- truth_degree(V), V > 0, val_phi(V,LB,UB);
-   weighted_typicality_inclusion(C,_,_);
+   weighted_typicality_inclusion(C,_,_), individual(X);
    #sum{
-       @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,VD)
+       @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,X,VD)
    } > LB;
-   not eval_ge(C,V).
+   not eval_ge(C,X,V).
 :- truth_degree(V), V > 0, val_phi(V,LB,UB);
-   weighted_typicality_inclusion(C,_,_);
+   weighted_typicality_inclusion(C,_,_), individual(X);
    not #sum{
-       @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,VD)
+       @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,X,VD)
    } > LB;
-   eval_ge(C,V).
+   eval_ge(C,X,V).
 """

@@ -47,8 +47,10 @@ class ValPhiPropagator(Propagator):
                     else float(weight.number)
 
     def __read_eval(self, init) -> None:
-        for s in init.symbolic_atoms.by_signature("eval", 2):
-            concept, value = s.symbol.arguments
+        for s in init.symbolic_atoms.by_signature("eval", 3):
+            concept, individual, value = s.symbol.arguments
+            validate("empty ABox", individual, equals=clingo.Function("anonymous"),
+                     help_msg="Propagator requires empty ABox")
             lit = init.solver_literal(s.literal)
             if self.__is_false(lit):
                 continue
