@@ -119,9 +119,24 @@ BASE_PROGRAM: Final = """
 % let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
 truth_degree(0..max_value).
 
-% concepts from the network topology
+% concepts from weighted typicality inclusions
 concept(C) :- weighted_typicality_inclusion(C,_,_).
 concept(C) :- weighted_typicality_inclusion(_,C,_).
+
+% concepts from concept inclusions
+concept(impl(C,D)) :- concept_inclusion(C,D,_).
+
+% concepts from the query
+concept(impl(C,D)) :- query(C,D,_).
+
+% sub-concepts
+concept(A) :- concept(and(A,B)).
+concept(B) :- concept(and(A,B)).
+concept(A) :- concept(or(A,B)).
+concept(B) :- concept(or(A,B)).
+concept(A) :- concept(neg(A)).
+concept(A) :- concept(impl(A,B)).
+concept(B) :- concept(impl(A,B)).
 
 % top class contains everything
 concept(top).
@@ -136,22 +151,15 @@ eval(bot,0).
 {eval(C,0); eval(C,max_value)} = 1 :- concept(C), @is_named_concept(C) = 1, crisp(C).
 :- concept(C), @is_named_concept(C) != 1, crisp(C); not eval(C,0), not eval(C,max_value).
 
-% all relevant concepts for the query
-concept(impl(C,D)) :- query(C,D,_).
-concept(A) :- concept(and(A,B)).
-concept(B) :- concept(and(A,B)).
-concept(A) :- concept(or(A,B)).
-concept(B) :- concept(or(A,B)).
-concept(A) :- concept(neg(A)).
-concept(A) :- concept(impl(A,B)).
-concept(B) :- concept(impl(A,B)).
-
 % Godel evaluation of complex concepts
 eval(and(A,B),@min(V1,V2))  :- concept(and(A,B)), eval(A,V1), eval(B,V2).
 eval( or(A,B),@max(V1,V2))  :- concept( or(A,B)), eval(A,V1), eval(B,V2).
 eval(neg(A),  max_value-V1) :- concept(neg(A)),   eval(A,V1).
-eval(impl(A,B), @godel_implication(V1,V2, max_value))
+eval(impl(A,B), @implication(V1,V2, max_value))
                             :- concept(impl(A,B)), eval(A,V1), eval(B,V2).
+
+% TBox axioms
+:- concept_inclusion(C,D,LowerBound); eval(impl(C,D),V), @lt(V,max_value, LowerBound) = 1.
 
 % support exactly-one constraints encoded as exactly_one(ID). exactly_one_element(ID,Concept). ... exactly_one_element(ID,Concept).
 :- exactly_one(ID), #count{Concept : exactly_one_element(ID,Concept), eval(Concept,max_value)} != 1.
@@ -167,6 +175,8 @@ attack(0,0,0) :- #false.
 exactly_one(0) :- #false.
 exactly_one_element(0,0) :- #false.
 query(0,0,0) :- #false.
+concept_inclusion(0,0,0) :- #false.
+weighted_typicality_inclusion(0,0,0) :- #false.
 """
 
 QUERY_ENCODING: Final = """
