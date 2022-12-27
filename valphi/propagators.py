@@ -33,7 +33,7 @@ class ValPhiPropagator(Propagator):
         self.output_value = None
 
     def __validate_max_value(self, init) -> None:
-        max_value = max(s.symbol.arguments[0].number for s in init.symbolic_atoms.by_signature("val", 1))
+        max_value = max(s.symbol.arguments[0].number for s in init.symbolic_atoms.by_signature("truth_degree", 1))
         utils.validate("max_value", max_value, equals=self.max_value,
                        help_msg="The provided ValPhi doesn't match the number of truth values")
 

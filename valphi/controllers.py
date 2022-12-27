@@ -117,7 +117,7 @@ class Controller:
 
 BASE_PROGRAM: Final = """
 % let's use max_value+1 truth degrees of the form 0/max_value ... max_value/max_value
-val(0..max_value).
+truth_degree(0..max_value).
 
 % concepts from the network topology
 concept(C) :- sub_type(C,_,_).
@@ -132,7 +132,7 @@ concept(bot).
 eval(bot,0).
 
 % guess evaluation (optimize for crisp concepts)
-{eval(C,V) : val(V)} = 1 :- concept(C), @is_named_concept(C) = 1, not crisp(C).
+{eval(C,V) : truth_degree(V)} = 1 :- concept(C), @is_named_concept(C) = 1, not crisp(C).
 {eval(C,0); eval(C,max_value)} = 1 :- concept(C), @is_named_concept(C) = 1, crisp(C).
 :- concept(C), @is_named_concept(C) != 1, crisp(C); not eval(C,0), not eval(C,max_value).
 
@@ -186,7 +186,7 @@ QUERY_ORDERED_ENCODING: Final = """
 """
 
 ORDERED_ENCODING: Final = """
-{eval_ge(C,V) : val(V), V > 0} :- concept(C).
+{eval_ge(C,V) : truth_degree(V), V > 0} :- concept(C).
 :- eval_ge(C,V), V > 1, not eval_ge(C,V-1).
 :- concept(C), eval(C,V), V > 0, not eval_ge(C,V).
 :- concept(C), eval_ge(C,V), not eval_ge(C,V+1), not eval(C,V).
@@ -204,7 +204,7 @@ ORDERED_ENCODING: Final = """
 
 % ¬A>=V <=> A<=max_value-V
 :- concept(neg(A)); eval_ge(neg(A),V); eval_ge(A,max_value-V+1).
-:- concept(neg(A)), val(V), V > 0; not eval_ge(A,max_value-V+1); not eval_ge(neg(A),V).
+:- concept(neg(A)), truth_degree(V), V > 0; not eval_ge(A,max_value-V+1); not eval_ge(neg(A),V).
 
 % A->B>=V <=> A<=B or B>=V
 premise_greater_than_conclusion(A,B) :-
@@ -212,18 +212,18 @@ premise_greater_than_conclusion(A,B) :-
     eval_ge(A,V);
     not eval_ge(B,V).
 :- concept(impl(A,B)); eval_ge(impl(A,B),V); premise_greater_than_conclusion(A,B); not eval_ge(B,V).
-:- concept(impl(A,B)), val(V), V > 0; not premise_greater_than_conclusion(A,B); not eval_ge(impl(A,B),V).
+:- concept(impl(A,B)), truth_degree(V), V > 0; not premise_greater_than_conclusion(A,B); not eval_ge(impl(A,B),V).
 :- concept(impl(A,B)); eval_ge(B,V); not eval_ge(impl(A,B),V).
 """
 
 WC_ENCODING: Final = """
-:- val(V), val_phi(V,LB,UB);
+:- truth_degree(V), val_phi(V,LB,UB);
    sub_type(C,_,_);
    LB < #sum{
        @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
    } <= UB;
    not eval(C,V).
-:- val(V), val_phi(V,LB,UB);
+:- truth_degree(V), val_phi(V,LB,UB);
    sub_type(C,_,_);
    not LB < #sum{
        @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
@@ -232,13 +232,13 @@ WC_ENCODING: Final = """
 """
 
 # WC_ORDERED_ENCODING: Final = """
-# :- val(V), val_phi(V,LB,UB);
+# :- truth_degree(V), val_phi(V,LB,UB);
 #    sub_type(C,_,_);
 #    LB < #sum{
 #        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
 #    } <= UB;
 #    not eval(C,V).
-# :- val(V), val_phi(V,LB,UB);
+# :- truth_degree(V), val_phi(V,LB,UB);
 #    sub_type(C,_,_);
 #    not LB < #sum{
 #        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
@@ -246,13 +246,13 @@ WC_ENCODING: Final = """
 #    eval(C,V).
 # """
 WC_ORDERED_ENCODING: Final = """
-:- val(V), V > 0, val_phi(V,LB,UB);
+:- truth_degree(V), V > 0, val_phi(V,LB,UB);
    sub_type(C,_,_);
    #sum{
        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
    } > LB;
    not eval_ge(C,V).
-:- val(V), V > 0, val_phi(V,LB,UB);
+:- truth_degree(V), V > 0, val_phi(V,LB,UB);
    sub_type(C,_,_);
    not #sum{
        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
