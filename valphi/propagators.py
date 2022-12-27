@@ -38,7 +38,7 @@ class ValPhiPropagator(Propagator):
                        help_msg="The provided ValPhi doesn't match the number of truth values")
 
     def __read_input_nodes(self, init) -> None:
-        for s in init.symbolic_atoms.by_signature("sub_type", 3):
+        for s in init.symbolic_atoms.by_signature("weighted_typicality_inclusion", 3):
             concept1, concept2, weight = s.symbol.arguments
             if str(concept1) == self.output_node:
                 self.input_nodes.add(concept2)

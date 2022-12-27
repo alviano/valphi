@@ -120,8 +120,8 @@ BASE_PROGRAM: Final = """
 truth_degree(0..max_value).
 
 % concepts from the network topology
-concept(C) :- sub_type(C,_,_).
-concept(C) :- sub_type(_,C,_).
+concept(C) :- weighted_typicality_inclusion(C,_,_).
+concept(C) :- weighted_typicality_inclusion(_,C,_).
 
 % top class contains everything
 concept(top).
@@ -218,44 +218,44 @@ premise_greater_than_conclusion(A,B) :-
 
 WC_ENCODING: Final = """
 :- truth_degree(V), val_phi(V,LB,UB);
-   sub_type(C,_,_);
+   weighted_typicality_inclusion(C,_,_);
    LB < #sum{
-       @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
+       @str_to_int(W) * VD,D,VD : weighted_typicality_inclusion(C,D,W), eval(D,VD), VD > 0
    } <= UB;
    not eval(C,V).
 :- truth_degree(V), val_phi(V,LB,UB);
-   sub_type(C,_,_);
+   weighted_typicality_inclusion(C,_,_);
    not LB < #sum{
-       @str_to_int(W) * VD,D,VD : sub_type(C,D,W), eval(D,VD), VD > 0
+       @str_to_int(W) * VD,D,VD : weighted_typicality_inclusion(C,D,W), eval(D,VD), VD > 0
    } <= UB;
    eval(C,V).
 """
 
 # WC_ORDERED_ENCODING: Final = """
 # :- truth_degree(V), val_phi(V,LB,UB);
-#    sub_type(C,_,_);
+#    weighted_typicality_inclusion(C,_,_);
 #    LB < #sum{
-#        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
+#        @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,VD)
 #    } <= UB;
 #    not eval(C,V).
 # :- truth_degree(V), val_phi(V,LB,UB);
-#    sub_type(C,_,_);
+#    weighted_typicality_inclusion(C,_,_);
 #    not LB < #sum{
-#        @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
+#        @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,VD)
 #    } <= UB;
 #    eval(C,V).
 # """
 WC_ORDERED_ENCODING: Final = """
 :- truth_degree(V), V > 0, val_phi(V,LB,UB);
-   sub_type(C,_,_);
+   weighted_typicality_inclusion(C,_,_);
    #sum{
-       @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
+       @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,VD)
    } > LB;
    not eval_ge(C,V).
 :- truth_degree(V), V > 0, val_phi(V,LB,UB);
-   sub_type(C,_,_);
+   weighted_typicality_inclusion(C,_,_);
    not #sum{
-       @str_to_int(W),D,VD : sub_type(C,D,W), eval_ge(D,VD)
+       @str_to_int(W),D,VD : weighted_typicality_inclusion(C,D,W), eval_ge(D,VD)
    } > LB;
    eval_ge(C,V).
 """

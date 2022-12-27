@@ -165,11 +165,11 @@ class NetworkTopology(NetworkInterface):
                     res.append(f"crisp({self.term(layer_index, node_index)}).")
                 weights = self.in_weights(layer=layer_index, node=node_index)
                 if weights:
-                    res.append(f"sub_type({self.term(layer_index, node_index)},"
+                    res.append(f"weighted_typicality_inclusion({self.term(layer_index, node_index)},"
                                f"top,\"{weights[0]}\").")
                     for weight_index, weight in enumerate(weights[1:], start=1):
                         res.append(
-                            f"sub_type({self.term(layer_index, node_index)},"
+                            f"weighted_typicality_inclusion({self.term(layer_index, node_index)},"
                             f"{self.term(layer_index - 1, weight_index)},\"{weight}\").")
         for index in range(self.number_of_exactly_one()):
             nodes = self.nodes_in_exactly_one(index)
@@ -236,7 +236,7 @@ class ArgumentationGraph(NetworkInterface):
     def _network_facts(self) -> Model:
         return Model.of_program(["""
             % weighted argumentation graphs are mapped to weighted typicality inclusions
-            sub_type(Attacked, Attacker, Weight) :- attack(Attacker, Attacked, Weight).
+            weighted_typicality_inclusion(Attacked, Attacker, Weight) :- attack(Attacker, Attacked, Weight).
         """] + [
             f"attack({self.term(attacker)}, {self.term(attacked)}, \"{weight}\")."
             for (attacker, attacked, weight) in self.__attacks
@@ -305,39 +305,39 @@ atom(Atom) :- clause_positive_literal(Clause, Atom).
 atom(Atom) :- clause_negative_literal(Clause, Atom).
 
 % boolean assignment
-crisp(A) :- atom(A).   % sub_type(A,A, {max_value} + 1) :- atom(A).
+crisp(A) :- atom(A).   % weighted_typicality_inclusion(A,A, {max_value} + 1) :- atom(A).
 
 % clause satisfaction
 crisp(C) :- clause(C).
-sub_type(C,top,NegativeLiterals * {max_value}) :- clause(C), NegativeLiterals = #count{{A : clause_negative_literal(C,A)}}.
-sub_type(C,A,{max_value}) :- clause(C), clause_positive_literal(C,A).
-sub_type(C,A,-{max_value}) :- clause(C), clause_negative_literal(C,A).
+weighted_typicality_inclusion(C,top,NegativeLiterals * {max_value}) :- clause(C), NegativeLiterals = #count{{A : clause_negative_literal(C,A)}}.
+weighted_typicality_inclusion(C,A,{max_value}) :- clause(C), clause_positive_literal(C,A).
+weighted_typicality_inclusion(C,A,-{max_value}) :- clause(C), clause_negative_literal(C,A).
 
 % number of satisfied clauses
-sub_type(sat,C,1) :- clause(C).
+weighted_typicality_inclusion(sat,C,1) :- clause(C).
 
 % even_0 is true
 crisp(even(0)).
-sub_type(even(0), top, {max_value}).
+weighted_typicality_inclusion(even(0), top, {max_value}).
 
 % even'(i+1) = valphi(n * (1 - even_i + C(i+1) - 1)) = max(0, C(i+1) - even_i)   --- 1 if and only if ~even_i & C_i is true
 crisp(even'(I+1)) :- I = 0..{max_value}-1.
-sub_type(even'(I+1),even(I),-{max_value}) :- I = 0..{max_value}-1.
-sub_type(even'(I+1),c(I+1),{max_value}) :- I = 0..{max_value}-1.
+weighted_typicality_inclusion(even'(I+1),even(I),-{max_value}) :- I = 0..{max_value}-1.
+weighted_typicality_inclusion(even'(I+1),c(I+1),{max_value}) :- I = 0..{max_value}-1.
 
 % even''(i+1) = valphi(n * (even_i + 1 - C(i+1) - 1)) = max(0, even_i - C(i+1))  --- 1 if and only even_i & ¬C_i is true
 crisp(even''(I+1)) :- I = 0..{max_value}-1.
-sub_type(even''(I+1),even(I),{max_value}) :- I = 0..{max_value}-1.
-sub_type(even''(I+1),c(I+1),-{max_value}) :- I = 0..{max_value}-1.
+weighted_typicality_inclusion(even''(I+1),even(I),{max_value}) :- I = 0..{max_value}-1.
+weighted_typicality_inclusion(even''(I+1),c(I+1),-{max_value}) :- I = 0..{max_value}-1.
 
 % even(i+1) = valphi(n * (even'(i+1) + even''(i+1))) = min(1, even'(i+1) + even''(i+1))    --- 1 if and only even'(i+1) | even''(i+1) is true
 crisp(even(I+1)) :- I = 0..{max_value}-1.
-sub_type(even(I+1),even'(I+1),{max_value}) :- I = 0..{max_value}-1.
-sub_type(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_value}-1.
+weighted_typicality_inclusion(even(I+1),even'(I+1),{max_value}) :- I = 0..{max_value}-1.
+weighted_typicality_inclusion(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_value}-1.
 
 #show.
 #show crisp/1.
-#show sub_type/3.
+#show weighted_typicality_inclusion/3.
         """])
 
     @cached_property
@@ -353,7 +353,7 @@ sub_type(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_value}-1.
     def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
         output_nodes = Model.of_program(self.network_facts.as_strings + ("""
 #show.
-#show Node : sub_type(Node,_,_).
+#show Node : weighted_typicality_inclusion(Node,_,_).
         """,))
         for node in output_nodes:
             control.register_propagator(ValPhiPropagator(str(node), val_phi=val_phi))
