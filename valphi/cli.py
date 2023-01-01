@@ -206,12 +206,9 @@ def command_query(
 
     with console.status("Running..."):
         res = app_options.controller.answer_query(query=query)
-    if res.query_true is None:
-        console.print("UNKNOWN")
-    else:
-        title = f"{str(res.query_true).upper()}: left concept {res.left_concept_value}; " \
-                f"right concept {res.right_concept_value} {'>=' if res.query_true else '<'} {res.threshold}"
-        if res.query_true:
-            title += f" (the implication reaches the threshold in all solutions where the left concept is " \
-                     f"{res.left_concept_value})"
-        console.print(network_values_to_table(res.eval_values, title=title))
+    title = f"TRUE: typical individuals of the left concept are assigned {res.left_concept_value}; " \
+            f"they reach the threshold {res.threshold} in all models" if res.true else \
+            f"FALSE: typical individuals of the left concept are assigned {res.left_concept_value}; " \
+            f"typical individual {res.typical_individual} does not reach the threshold {res.threshold} " \
+            f"and is assigned {res.right_concept_value} here"
+    console.print(network_values_to_table(res.assignment, title=title))
