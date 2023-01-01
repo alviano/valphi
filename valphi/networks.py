@@ -48,9 +48,8 @@ class NetworkInterface:
     @cached_property
     def network_facts(self) -> Model:
         self.validate_is_complete()
-        return self._network_facts
+        return self._network_facts()
 
-    @cached_property
     def _network_facts(self) -> Model:
         raise NotImplemented
 
@@ -64,6 +63,19 @@ class NetworkInterface:
     @cached_property
     def val_phi(self):
         raise NotImplemented
+
+
+@typeguard.typechecked
+@dataclasses.dataclass(frozen=True)
+class EmptyNetwork(NetworkInterface):
+    def __post_init__(self):
+        self.complete()
+
+    def _network_facts(self) -> Model:
+        return Model.empty()
+
+    def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
+        pass
 
 
 @typeguard.typechecked
@@ -156,7 +168,6 @@ class NetworkTopology(NetworkInterface):
     def layer_term(layer: int) -> str:
         return f"l{layer}"
 
-    @cached_property
     def _network_facts(self) -> Model:
         res = []
         for layer_index, _ in enumerate(range(self.number_of_layers()), start=1):
@@ -232,7 +243,6 @@ class ArgumentationGraph(NetworkInterface):
     def term(node: int) -> str:
         return f"a{node}"
 
-    @cached_property
     def _network_facts(self) -> Model:
         return Model.of_program(["""
             % weighted argumentation graphs are mapped to weighted typicality inclusions
@@ -297,7 +307,6 @@ class MaxSAT(NetworkInterface):
                     res.append(f"clause_negative_literal(c({index}), x{-literal}).")
         return res
 
-    @cached_property
     def _network_facts(self) -> Model:
         max_value = clingo.Number(self.number_of_clauses)
         return Model.of_program(self.serialize_clauses_as_facts() + [f"""
