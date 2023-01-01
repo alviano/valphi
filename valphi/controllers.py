@@ -1,9 +1,10 @@
 import dataclasses
-from collections import namedtuple
-from typing import List, Dict, Optional, Final
+from typing import List, Optional, Final, Union
 
 import clingo
+import typeguard
 from clingo.symbol import Number
+from pydot import frozendict
 
 from valphi import utils
 from valphi.contexts import Context
@@ -11,6 +12,7 @@ from valphi.models import ModelCollect, LastModel
 from valphi.networks import NetworkTopology, MaxSAT, NetworkInterface
 
 
+@typeguard.typechecked
 @dataclasses.dataclass(frozen=True)
 class Controller:
     network: NetworkInterface
@@ -20,7 +22,37 @@ class Controller:
     use_wc: bool = dataclasses.field(default=False)
     use_ordered_encoding: bool = dataclasses.field(default=False)
 
-    QueryResult = namedtuple("QueryResult", "query_true left_concept_value right_concept_value threshold eval_values")
+    @typeguard.typechecked
+    @dataclasses.dataclass(frozen=True)
+    class QueryTrue:
+        threshold: float
+        left_concept_value: float
+        assignment: frozendict = dataclasses.field(default_factory=frozendict)
+
+        @property
+        def true(self):
+            return True
+
+        @property
+        def false(self):
+            return False
+
+    @typeguard.typechecked
+    @dataclasses.dataclass(frozen=True)
+    class QueryFalse:
+        threshold: float
+        typical_individual: str
+        left_concept_value: float
+        right_concept_value: float
+        assignment: frozendict = dataclasses.field(default_factory=frozendict)
+
+        @property
+        def true(self):
+            return False
+
+        @property
+        def false(self):
+            return True
 
     def __post_init__(self):
         utils.validate("max_value", self.max_value, min_value=1, max_value=1000)
@@ -55,7 +87,7 @@ class Controller:
             self.network.register_propagators(control, self.val_phi)
         return control
 
-    def __read_eval(self, model) -> Dict:
+    def __read_eval(self, model) -> frozendict:
         res = {}
         for symbol in model:
             if symbol.name == "eval":
@@ -66,10 +98,10 @@ class Controller:
                     layer, node = concept.name[1:].split('_', maxsplit=1)
                     res[(int(layer), int(node))] = value.number
                 else:
-                    res[str(concept)] = value.number
-        return res
+                    res[f"{concept}({individual})"] = f"{value.number}/{self.max_value}"
+        return frozendict(res)
 
-    def find_solutions(self) -> List[Dict]:
+    def find_solutions(self) -> List[frozendict]:
         if type(self.network) is MaxSAT:
             raise ValueError("Use 'query even' for MaxSAT")
         control = self.__setup_control()
@@ -77,13 +109,13 @@ class Controller:
         control.solve(on_model=model_collect)
         return [self.__read_eval(model) for model in model_collect]
 
-    def answer_query(self, query: str) -> QueryResult:
+    def answer_query(self, query: str) -> Union[QueryTrue, QueryFalse]:
         if type(self.network) is MaxSAT:
             utils.validate("query", query, equals="even")
             query = self.network.query
         utils.validate("query", query, custom=[utils.pattern(r"[^#]+#[^#]+#(1|1.0|0\.\d+)")])
         left, right, threshold = query.split('#')
-        control = self.__setup_control(f"{left},{right},\"{threshold}\"")
+        control = self.__setup_control(f'{left},{right},">=","{threshold}"')
 
         last_model = LastModel()
         control.solve(on_model=last_model)
@@ -92,16 +124,20 @@ class Controller:
             model = last_model.get()
             eval_values = self.__read_eval(model)
             for symbol in model:
-                if symbol.name in ["query_false", "query_true"]:
-                    return self.QueryResult(
-                        query_true=symbol.name == "query_true",
-                        left_concept_value=symbol.arguments[0].number / self.max_value,
-                        right_concept_value=symbol.arguments[1].number / self.max_value,
-                        threshold=threshold,
-                        eval_values=eval_values,
+                if symbol.name == "query_false":
+                    return self.QueryFalse(
+                        threshold=float(threshold),
+                        typical_individual=str(symbol.arguments[0]),
+                        left_concept_value=symbol.arguments[1].number / self.max_value,
+                        right_concept_value=symbol.arguments[2].number / self.max_value,
+                        assignment=eval_values,
                     )
-        return self.QueryResult(query_true=None, left_concept_value=None, right_concept_value=None, threshold=None,
-                                eval_values=None)
+                elif symbol.name == "query_true":
+                    return self.QueryTrue(
+                        threshold=float(threshold),
+                        left_concept_value=symbol.arguments[0].number / self.max_value,
+                        assignment=eval_values,
+                    )
 
     def __generate_wc(self):
         res = [f"val_phi(0,#inf,{self.val_phi[0]})."]
@@ -126,12 +162,13 @@ individual(anonymous).
 concept(C) :- weighted_typicality_inclusion(C,_,_).
 concept(C) :- weighted_typicality_inclusion(_,C,_).
 
-% concepts from TBox and ABox
+% concepts and individuals from TBox and ABox
 concept(impl(C,D)) :- concept_inclusion(C,D,_,_).
 concept(C) :- assertion(C,_,_,_).
+individual(X) :- assertion(_,X,_,_).
 
 % concepts from the query
-concept(impl(C,D)) :- query(C,D,_).
+concept(impl(C,D)) :- query(C,D,_,_).
 
 % sub-concepts
 concept(A) :- concept(and(A,B)).
@@ -181,10 +218,17 @@ concept_inclusion(C,D,"<=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Oper
 % support exactly-one constraints encoded as exactly_one(ID). exactly_one_element(ID,Concept). ... exactly_one_element(ID,Concept).
 :- exactly_one(ID), individual(X), #count{Concept : exactly_one_element(ID,Concept), eval(Concept,X,max_value)} != 1.
 
+% verify if there is a counterexample for the right-hand-side concept of the query
+typical_element(C,X) :- query(C,_,_,_), eval(C,X,V), V = #max{V' : eval(C,X',V')}.
+query_false(X,V) :- query(C,D,Operator,Alpha), typical_element(C,X);
+   eval(impl(C,D),X,V), @apply_operator(V,max_value, Operator,Alpha) != 1.
+:~ query_false(_,_). [-1@1] 
+
+
 #show.
 #show eval(C,X,V) : eval(C,X,V), concept(C), @is_named_concept(C) = 1.
-#show query_true (V,V') : query(C,D,Alpha), eval(C,X,V), eval(impl(C,D),X,V'), @lt(V',max_value, Alpha) != 1.
-#show query_false(V,V') : query(C,D,Alpha), eval(C,X,V), eval(impl(C,D),X,V'), @lt(V',max_value, Alpha) =  1.
+#show query_true (V) : not query_false(_,_), query(C,D,_,Alpha), typical_element(C,X), eval(C,X,V).
+#show query_false(X,V,V') :  query_false(_,_), query(C,D,_,Alpha), typical_element(C,X), eval(C,X,V), eval(impl(C,D),X,V').
 
 % prevent these warnings
 individual(0) :- #false.
@@ -192,7 +236,7 @@ crisp(0) :- #false.
 attack(0,0,0) :- #false.
 exactly_one(0) :- #false.
 exactly_one_element(0,0) :- #false.
-query(0,0,0) :- #false.
+query(0,0,0,0) :- #false.
 concept_inclusion(0,0,0,0) :- #false.
 assertion(0,0,0,0) :- #false.
 weighted_typicality_inclusion(0,0,0) :- #false.
@@ -200,18 +244,12 @@ weighted_typicality_inclusion(0,0,0) :- #false.
 
 QUERY_ENCODING: Final = """
 % find the largest truth degree for the left-hand-side concept of query 
-:~ query(C,_,_), eval(C,X,V), V > 0. [-1@V+1, C,X,V]
-
-% verify if there is a counterexample for the right-hand-side concept of the query
-:~ query(C,D,Alpha), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1. [-1@1, C,D,X,Alpha,V] 
+:~ query(C,_,_,_), eval(C,X,V), V > 0. [-1@V+1]
 """
 
 QUERY_ORDERED_ENCODING: Final = """
 % find the largest truth degree for the left-hand-side concept of query 
-:~ query(C,_,_), eval_ge(C,X,V). [-1@2, C,X,V]
-
-% verify if there is a counterexample for the right-hand-side concept of the query
-:~ query(C,D,Alpha), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1. [-1@1, C,D,X,Alpha,V] 
+:~ query(C,_,_,_), eval_ge(C,X,V). [-1@2, V]
 """
 
 ORDERED_ENCODING: Final = """

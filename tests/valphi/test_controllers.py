@@ -2,7 +2,7 @@ import pytest
 
 from valphi import utils
 from valphi.controllers import Controller
-from valphi.networks import NetworkTopology, ArgumentationGraph, MaxSAT
+from valphi.networks import NetworkTopology, ArgumentationGraph, MaxSAT, EmptyNetwork
 
 
 def parse_query(string):
@@ -74,9 +74,9 @@ def check_all_options_for_query(network, query):
     wc = Controller(network=network, use_wc=True, use_ordered_encoding=False).answer_query(query)
     ordered = Controller(network=network, use_wc=False, use_ordered_encoding=True).answer_query(query)
     wc_ordered = Controller(network=network, use_wc=True, use_ordered_encoding=True).answer_query(query)
-    assert simple.query_true == wc.query_true
-    assert simple.query_true == ordered.query_true
-    assert simple.query_true == wc_ordered.query_true
+    assert simple.true == wc.true
+    assert simple.true == ordered.true
+    assert simple.true == wc_ordered.true
 
 
 def check_all_options_for_max_sat(network, even, only_wc: bool = True):
@@ -85,15 +85,15 @@ def check_all_options_for_max_sat(network, even, only_wc: bool = True):
             .answer_query("even")
         ordered = Controller(network=network, use_wc=False, use_ordered_encoding=True, val_phi=network.val_phi)\
             .answer_query("even")
-        assert simple.query_true == even
-        assert ordered.query_true == even
+        assert simple.true == even
+        assert ordered.true == even
 
     wc = Controller(network=network, use_wc=True, use_ordered_encoding=False, val_phi=network.val_phi)\
         .answer_query("even")
     wc_ordered = Controller(network=network, use_wc=True, use_ordered_encoding=True,
                             val_phi=network.val_phi).answer_query("even")
-    assert wc.query_true == even
-    assert wc_ordered.query_true == even
+    assert wc.true == even
+    assert wc_ordered.true == even
 
 
 @pytest.fixture
@@ -195,3 +195,27 @@ def test_max_sat_odd(instance):
 def test_max_sat_even(instance):
     check_all_options_for_max_sat(instance, even=True)
 
+
+def test_individuals():
+    res = Controller(
+        network=EmptyNetwork(),
+        use_wc=True,
+        use_ordered_encoding=True,
+        raw_code="""
+            assertion(c,a,"=","1.0").
+            assertion(c,b,"<","1.0").
+            assertion(d,b,"=","1.0").
+        """
+    ).answer_query("c#d#1.0")
+    assert not res.true
+    res = Controller(
+        network=EmptyNetwork(),
+        use_wc=True,
+        use_ordered_encoding=True,
+        raw_code="""
+            assertion(c,a,"=","1.0").
+            assertion(c,b,"<","1.0").
+            concept_inclusion(top,d,"=","1.0").
+        """
+    ).answer_query("c#d#1.0")
+    assert res.true

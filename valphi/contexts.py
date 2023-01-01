@@ -53,7 +53,7 @@ class Context:
 
     @staticmethod
     def apply_operator(num, den, operator, real):
-        validate("operator", operator, is_in=[">=", ">", "<=", "<", "=", "!="])
+        validate("operator", operator.string, is_in=[">=", ">", "<=", "<", "=", "!="])
         if operator.string == ">=":
             return Context.ge(num, den, real)
         if operator.string == ">":
