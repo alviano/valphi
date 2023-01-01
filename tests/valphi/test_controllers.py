@@ -101,28 +101,20 @@ def kbmonk1():
     return read_network_from_file("kbmonk1")
 
 
-def kbmonk1_queries():
-    return [
-        read_query_from_file(f"kbmonk1-{index + 1}") for index in range(7)
-    ]
-
-
 def test_kbmonk1_solve(kbmonk1):
     check_all_options(kbmonk1)
 
 
-@pytest.mark.parametrize("query", kbmonk1_queries())
+@pytest.mark.parametrize("query", [
+    read_query_from_file(f"kbmonk1-{index + 1}") for index in range(7)
+])
 def test_kbmonk1_query(kbmonk1, query):
     check_all_options_for_query(kbmonk1, query)
 
 
-def graphs():
-    return [
-        read_graph_from_file(f"small-{index + 1}") for index in range(6)
-    ]
-
-
-@pytest.mark.parametrize("graph", graphs())
+@pytest.mark.parametrize("graph", [
+    read_graph_from_file(f"small-{index + 1}") for index in range(6)
+])
 def test_solve_graph(graph):
     check_all_options(graph)
 
