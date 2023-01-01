@@ -126,8 +126,9 @@ individual(anonymous).
 concept(C) :- weighted_typicality_inclusion(C,_,_).
 concept(C) :- weighted_typicality_inclusion(_,C,_).
 
-% concepts from concept inclusions
-concept(impl(C,D)) :- concept_inclusion(C,D,_).
+% concepts from TBox and ABox
+concept(impl(C,D)) :- concept_inclusion(C,D,_,_).
+concept(C) :- assertion(C,_,_,_).
 
 % concepts from the query
 concept(impl(C,D)) :- query(C,D,_).
@@ -161,9 +162,21 @@ eval(neg(A),   X, max_value-V1) :- concept(neg(A)),   individual(X), eval(A,X,V1
 eval(impl(A,B),X, @implication(V1,V2, max_value))
     :- concept(impl(A,B)), individual(X), eval(A,X,V1), eval(B,X,V2).
 
-% TBox axioms
-:- concept_inclusion(C,D,LowerBound); eval(impl(C,D),X,V), @lt(V,max_value, LowerBound) = 1.
-:- assertion(C,X,LowerBound); eval(C,X,V), @lt(V,max_value, LowerBound) = 1.
+% TBox and ABox axioms
+:- concept_inclusion(C,D,Operator,Alpha), Operator = ">="; 
+    eval(impl(C,D),X,V), @ge(V,max_value, Alpha) != 1.
+:- concept_inclusion(C,D,Operator,Alpha), Operator = ">"; 
+    eval(impl(C,D),X,V), @gt(V,max_value, Alpha) != 1.
+:- concept_inclusion(C,D,Operator,Alpha), Operator = "<="; 
+    #count{X : individual(X), eval(impl(C,D),X,V), @le(V,max_value, Alpha) = 1} = 0.
+:- concept_inclusion(C,D,Operator,Alpha), Operator = "<"; 
+    #count{X : individual(X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0.
+concept_inclusion(C,D,">=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=". 
+concept_inclusion(C,D,"<=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=". 
+:- concept_inclusion(C,D,Operator,Alpha), Operator = "!=";
+    #count{X : individual(X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0;
+    eval(impl(C,D),_,V), @gt(V,max_value, Alpha) != 1.
+:- assertion(C,X,Operator,Alpha); eval(C,X,V), @apply_operator(V,max_value, Operator,Alpha) != 1.
 
 % support exactly-one constraints encoded as exactly_one(ID). exactly_one_element(ID,Concept). ... exactly_one_element(ID,Concept).
 :- exactly_one(ID), individual(X), #count{Concept : exactly_one_element(ID,Concept), eval(Concept,X,max_value)} != 1.
@@ -180,8 +193,8 @@ attack(0,0,0) :- #false.
 exactly_one(0) :- #false.
 exactly_one_element(0,0) :- #false.
 query(0,0,0) :- #false.
-concept_inclusion(0,0,0) :- #false.
-assertion(0,0,0) :- #false.
+concept_inclusion(0,0,0,0) :- #false.
+assertion(0,0,0,0) :- #false.
 weighted_typicality_inclusion(0,0,0) :- #false.
 """
 
