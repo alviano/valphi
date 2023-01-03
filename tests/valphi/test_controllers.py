@@ -211,3 +211,12 @@ def test_individuals():
         """
     ).answer_query("c#d#1.0")
     assert res.true
+
+
+def test_weight_constraints_requires_integer_val_phi():
+    with pytest.raises(ValueError):
+        Controller(
+            network=EmptyNetwork(),
+            use_wc=True,
+            val_phi=[0, 0.5, 1],
+        )

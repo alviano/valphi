@@ -57,6 +57,10 @@ class Controller:
     def __post_init__(self):
         utils.validate("max_value", self.max_value, min_value=1, max_value=1000)
         utils.validate("val_phi", self.val_phi, equals=sorted(self.val_phi))
+        utils.validate("val-phi must be integer", all(type(value) is int or value.is_integer()
+                                                      for value in self.val_phi),
+                       equals=True,
+                       help_msg="Weight-constraints requires an integer val-phi")
         if type(self.network) is MaxSAT:
             utils.validate("", self.val_phi, equals=self.network.val_phi)
 
@@ -140,10 +144,10 @@ class Controller:
                     )
 
     def __generate_wc(self):
-        res = [f"val_phi(0,#inf,{self.val_phi[0]})."]
+        res = [f"val_phi(0,#inf,{int(self.val_phi[0])})."]
         for value in range(len(self.val_phi) - 1):
-            res.append(f"val_phi({value + 1},{self.val_phi[value]},{self.val_phi[value + 1]}).")
-        res.append(f"val_phi({len(self.val_phi)},{self.val_phi[-1]},#sup).")
+            res.append(f"val_phi({value + 1},{int(self.val_phi[value])},{int(self.val_phi[value + 1])}).")
+        res.append(f"val_phi({len(self.val_phi)},{int(self.val_phi[-1])},#sup).")
         if self.use_ordered_encoding:
             res.append(WC_ORDERED_ENCODING)
         else:
