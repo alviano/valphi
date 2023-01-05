@@ -117,7 +117,8 @@ class Controller:
         if type(self.network) is MaxSAT:
             utils.validate("query", query, equals="even")
             query = self.network.query
-        utils.validate("query", query, custom=[utils.pattern(r"[^#]+#[^#]+#(1|1.0|0\.\d+)")])
+        utils.validate("query", query, custom=[utils.pattern(r"[^#]+#[^#]+#(1|1.0|0\.\d+)")],
+                       help_msg=f'The query "{query}" is not in the expected format. Is it a filename?')
         left, right, threshold = query.split('#')
         control = self.__setup_control(f'{left},{right},">=","{threshold}"')
 

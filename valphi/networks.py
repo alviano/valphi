@@ -82,6 +82,7 @@ class EmptyNetwork(NetworkInterface):
 @dataclasses.dataclass(frozen=True)
 class NetworkTopology(NetworkInterface):
     __layers: List[List[List[float]]] = dataclasses.field(default_factory=list, init=False)
+    __crisp_layers: set[int] = dataclasses.field(default_factory=set, init=False)
     __exactly_one: List[List[int]] = dataclasses.field(default_factory=list, init=False)
 
     @staticmethod
@@ -97,6 +98,9 @@ class NetworkTopology(NetworkInterface):
             if line.startswith("=1 "):
                 res.add_exactly_one([int(x) for x in line.split()[1:]])
                 continue
+            if line.startswith("crisp "):
+                res.crisp_layer(int(line.split(' ', maxsplit=1)[1]))
+                continue
             weights = [float(x) for x in line.split()]
             if len(res.__layers) == 1:
                 for _ in weights[1:]:
@@ -108,6 +112,11 @@ class NetworkTopology(NetworkInterface):
     def add_layer(self) -> 'NetworkTopology':
         self.validate_is_not_complete()
         self.__layers.append([])
+        return self
+
+    def crisp_layer(self, index: int) -> 'NetworkTopology':
+        self.__validate_layer_index(index)
+        self.__crisp_layers.add(index)
         return self
 
     def add_node(self, weights: Optional[List[float]] = None) -> 'NetworkTopology':
@@ -172,7 +181,7 @@ class NetworkTopology(NetworkInterface):
         res = []
         for layer_index, _ in enumerate(range(self.number_of_layers()), start=1):
             for node_index, _ in enumerate(range(self.number_of_nodes(layer=layer_index)), start=1):
-                if layer_index == 1:
+                if layer_index in self.__crisp_layers:
                     res.append(f"crisp({self.term(layer_index, node_index)}).")
                 weights = self.in_weights(layer=layer_index, node=node_index)
                 if weights:

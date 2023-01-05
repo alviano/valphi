@@ -40,6 +40,7 @@ def two_layers_three_nodes_network():
         .add_exactly_one([1, 2])\
         .add_layer()\
         .add_node([10, 20, -10])\
+        .crisp_layer(1)\
         .complete()
 
 
