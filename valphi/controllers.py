@@ -260,9 +260,11 @@ QUERY_ORDERED_ENCODING: Final = """
 ORDERED_ENCODING: Final = """
 {eval_ge(C,X,V) : truth_degree(V), V > 0} :- concept(C), individual(X).
 :- eval_ge(C,X,V), V > 1, not eval_ge(C,X,V-1).
-:- concept(C), individual(X), eval(C,X,V), V > 0, not eval_ge(C,X,V).
-:- concept(C), individual(X), eval_ge(C,X,V), not eval_ge(C,X,V+1), not eval(C,X,V).
-:- concept(C), individual(X), not eval_ge(C,X,1), not eval(C,X,0).
+
+% C=V <=> C>=V and C<V+1
+:- concept(C), individual(X); eval(C,X,V), V > 0; not eval_ge(C,X,V).
+:- concept(C), individual(X); eval(C,X,V); eval_ge(C,X,V+1).
+:- concept(C), individual(X); eval_ge(C,X,V), not eval_ge(C,X,V+1); not eval(C,X,V).
 
 % A&B>=V <=> A>=V and B>=V 
 :- concept(and(A,B)), individual(X), eval_ge(and(A,B),X,V); not eval_ge(A,X,V).
