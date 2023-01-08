@@ -361,7 +361,7 @@ weighted_typicality_inclusion(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_
     @cached_property
     def query(self) -> str:
         self.validate_is_complete()
-        return "sat#even(max_value)#1.0"
+        return "sat#even(max_value)#>=#1.0"
 
     @cached_property
     def val_phi(self):

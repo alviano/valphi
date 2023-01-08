@@ -24,35 +24,41 @@ class Controller:
 
     @typeguard.typechecked
     @dataclasses.dataclass(frozen=True)
-    class QueryTrue:
-        threshold: float
-        left_concept_value: float
+    class QueryResult:
+        true: bool
+        consistent_knowledge_base: bool
+        left_concept_value: Optional[float]
         assignment: frozendict = dataclasses.field(default_factory=frozendict)
 
         @property
-        def true(self):
-            return True
-
-        @property
         def false(self):
-            return False
+            return not self.true
 
-    @typeguard.typechecked
-    @dataclasses.dataclass(frozen=True)
-    class QueryFalse:
-        threshold: float
-        typical_individual: str
-        left_concept_value: float
-        right_concept_value: float
-        assignment: frozendict = dataclasses.field(default_factory=frozendict)
+        @staticmethod
+        def of_true(left_concept_value: float, assignment: frozendict) -> 'Controller.QueryResult':
+            return Controller.QueryResult(
+                true=True,
+                consistent_knowledge_base=True,
+                left_concept_value=left_concept_value,
+                assignment=assignment,
+            )
 
-        @property
-        def true(self):
-            return False
+        @staticmethod
+        def of_false(left_concept_value: float, assignment: frozendict) -> 'Controller.QueryResult':
+            return Controller.QueryResult(
+                true=False,
+                consistent_knowledge_base=True,
+                left_concept_value=left_concept_value,
+                assignment=assignment,
+            )
 
-        @property
-        def false(self):
-            return True
+        @staticmethod
+        def of_inconsistent_knowledge_base() -> 'Controller.QueryResult':
+            return Controller.QueryResult(
+                true=True,
+                consistent_knowledge_base=False,
+                left_concept_value=None,
+            )
 
     def __post_init__(self):
         utils.validate("max_value", self.max_value, min_value=1, max_value=1000)
@@ -113,36 +119,34 @@ class Controller:
         control.solve(on_model=model_collect)
         return [self.__read_eval(model) for model in model_collect]
 
-    def answer_query(self, query: str) -> Union[QueryTrue, QueryFalse]:
+    def answer_query(self, query: str) -> QueryResult:
         if type(self.network) is MaxSAT:
             utils.validate("query", query, equals="even")
             query = self.network.query
-        utils.validate("query", query, custom=[utils.pattern(r"[^#]+#[^#]+#(1|1.0|0\.\d+)")],
+        utils.validate("query", query, custom=[utils.pattern(r"[^#]+#[^#]+#(<|<=|>=|>|=|!=)#(1|1.0|0\.\d+)")],
                        help_msg=f'The query "{query}" is not in the expected format. Is it a filename?')
-        left, right, threshold = query.split('#')
-        control = self.__setup_control(f'{left},{right},">=","{threshold}"')
+        left, right, comparator, threshold = query.split('#')
+        control = self.__setup_control(f'{left},{right},"{comparator}","{threshold}"')
 
         last_model = LastModel()
         control.solve(on_model=last_model)
 
-        if last_model.has():
-            model = last_model.get()
-            eval_values = self.__read_eval(model)
-            for symbol in model:
-                if symbol.name == "query_false":
-                    return self.QueryFalse(
-                        threshold=float(threshold),
-                        typical_individual=str(symbol.arguments[0]),
-                        left_concept_value=symbol.arguments[1].number / self.max_value,
-                        right_concept_value=symbol.arguments[2].number / self.max_value,
-                        assignment=eval_values,
-                    )
-                elif symbol.name == "query_true":
-                    return self.QueryTrue(
-                        threshold=float(threshold),
-                        left_concept_value=symbol.arguments[0].number / self.max_value,
-                        assignment=eval_values,
-                    )
+        if not last_model.has():
+            return self.QueryResult.of_inconsistent_knowledge_base()
+
+        model = last_model.get()
+        eval_values = self.__read_eval(model)
+        for symbol in model:
+            if symbol.name == "query_false":
+                return self.QueryResult.of_false(
+                    left_concept_value=symbol.arguments[0].number / self.max_value,
+                    assignment=eval_values,
+                )
+            elif symbol.name == "query_true":
+                return self.QueryResult.of_true(
+                    left_concept_value=symbol.arguments[0].number / self.max_value,
+                    assignment=eval_values,
+                )
 
     def __generate_wc(self):
         res = [f"val_phi(0,#inf,{int(self.val_phi[0])})."]
@@ -225,15 +229,28 @@ concept_inclusion(C,D,"<=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Oper
 
 % verify if there is a counterexample for the right-hand-side concept of the query
 typical_element(C,X) :- query(C,_,_,_), eval(C,X,V), V = #max{V' : eval(C,X',V')}.
-query_false(X,V) :- query(C,D,Operator,Alpha), typical_element(C,X);
-   eval(impl(C,D),X,V), @apply_operator(V,max_value, Operator,Alpha) != 1.
-:~ query_false(_,_). [-1@1] 
+query_false :- query(C,D,Operator,Alpha), Operator = ">=";
+   typical_element(C,X), eval(impl(C,D),X,V), @ge(V,max_value, Alpha) != 1.
+query_false :- query(C,D,Operator,Alpha), Operator = ">";
+   typical_element(C,X), eval(impl(C,D),X,V), @gt(V,max_value, Alpha) != 1.
+query_false :- query(C,D,Operator,Alpha), Operator = "<=";
+   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @le(V,max_value, Alpha) = 1} = 0.
+query_false :- query(C,D,Operator,Alpha), Operator = "<";
+   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0.
+query_false :- query(C,D,Operator,Alpha), Operator = "=";
+   typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1.
+query_false :- query(C,D,Operator,Alpha), Operator = "=";
+   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @eq(V,max_value, Alpha) = 1} = 0.
+query_false :- query(C,D,Operator,Alpha), Operator = "!=";
+   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0;
+   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @eq(V,max_value, Alpha) = 1} > 0.
+:~ query_false. [-1@1] 
 
 
 #show.
 #show eval(C,X,V) : eval(C,X,V), concept(C), @is_named_concept(C) = 1.
-#show query_true (V) : not query_false(_,_), query(C,D,_,Alpha), typical_element(C,X), eval(C,X,V).
-#show query_false(X,V,V') :  query_false(_,_), query(C,D,_,Alpha), typical_element(C,X), eval(C,X,V), eval(impl(C,D),X,V').
+#show query_true (V) : not query_false, query(C,D,_,Alpha), typical_element(C,X), eval(C,X,V).
+#show query_false(V) :  query_false, query(C,D,_,Alpha), typical_element(C,X), eval(C,X,V).
 
 % prevent these warnings
 individual(0) :- #false.

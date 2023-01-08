@@ -206,9 +206,6 @@ def command_query(
 
     with console.status("Running..."):
         res = app_options.controller.answer_query(query=query)
-    title = f"TRUE: typical individuals of the left concept are assigned {res.left_concept_value}; " \
-            f"they reach the threshold {res.threshold} in all models" if res.true else \
-            f"FALSE: typical individuals of the left concept are assigned {res.left_concept_value}; " \
-            f"typical individual {res.typical_individual} does not reach the threshold {res.threshold} " \
-            f"and is assigned {res.right_concept_value} here"
+    title = f"{str(res.true).upper()}: typical individuals of the left concept are assigned {res.left_concept_value}" \
+        if res.consistent_knowledge_base else f"TRUE: the knowledge base is inconsistent!"
     console.print(network_values_to_table(res.assignment, title=title))

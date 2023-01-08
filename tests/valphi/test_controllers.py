@@ -199,7 +199,7 @@ def test_individuals():
             assertion(c,b,"<","1.0").
             assertion(d,b,"=","1.0").
         """
-    ).answer_query("c#d#1.0")
+    ).answer_query("c#d#>=#1.0")
     assert not res.true
     res = Controller(
         network=EmptyNetwork(),
@@ -210,7 +210,7 @@ def test_individuals():
             assertion(c,b,"<","1.0").
             concept_inclusion(top,d,"=","1.0").
         """
-    ).answer_query("c#d#1.0")
+    ).answer_query("c#d#>=#1.0")
     assert res.true
 
 
@@ -221,3 +221,30 @@ def test_weight_constraints_requires_integer_val_phi():
             use_wc=True,
             val_phi=[0, 0.5, 1],
         )
+
+
+def test_knowledge_base_can_be_inconsistent():
+    res = Controller(
+        network=EmptyNetwork(),
+        use_wc=True,
+        use_ordered_encoding=False,
+        raw_code="""
+                concept_inclusion(top,c,">=","1.0").
+                assertion(c,a,"<=","0").
+            """
+    ).answer_query("c#d#>=#1.0")
+    assert not res.consistent_knowledge_base
+
+
+def test_concept_inclusion_with_individuals():
+    res = Controller(
+        network=EmptyNetwork(),
+        use_wc=True,
+        use_ordered_encoding=False,
+        raw_code="""
+                assertion(c,a,">=","1").
+                assertion(d,a,">=","0").
+                assertion(d,a,"<","1").
+            """
+    ).answer_query("c#d#<#1.0")
+    assert res.true
