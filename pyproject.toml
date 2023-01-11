@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "valphi"
-version = "0.3.18"
+version = "0.3.19"
 description = "Logic programs ralying on ValPhi semantics"
 authors = ["Mario Alviano <mario.alviano@gmail.com>"]
 
@@ -10,6 +10,7 @@ typer = "^0.7.0"
 rich = "^12.5.1"
 typeguard = "^2.13.3"
 valid8 = "^5.1.2"
+pydot = "^1.4.2"
 
 [tool.poetry.dev-dependencies]
 coverage = "^6.5.0"
