@@ -54,18 +54,6 @@ def main(
             "-f",
             help="One or more files to parse",
         ),
-        number_of_solutions: int = typer.Option(
-            0,
-            "--number-of-solutions",
-            "-s",
-            help="Maximum number of solutions to compute (0 for unbounded)",
-        ),
-        # max_value: int = typer.Option(
-        #     5,
-        #     "--max-value",
-        #     "-n",
-        #     help="Maximum value for truth degrees (use rational values 0/n ... n/n)",
-        # ),
         weight_constraints: bool = typer.Option(False, help="Use weight constraints instead of ad-hoc propagator"),
         ordered: bool = typer.Option(False, help="Add ordered encoding for eval/3"),
         debug: bool = typer.Option(False, "--debug", help="Don't minimize browser"),
@@ -77,8 +65,6 @@ def main(
     """
     global app_options
 
-    validate('number_of_solutions', number_of_solutions, min_value=0)
-    # validate('max_value', max_value, min_value=0)
     validate('network_filename', network_filename.exists() and network_filename.is_file(), equals=True,
              help_msg=f"File {network_filename} does not exists")
     for filename in filenames:
@@ -109,7 +95,6 @@ def main(
         network=network,
         val_phi=val_phi,
         raw_code='\n'.join(lines),
-        max_stable_models=number_of_solutions,
         use_wc=weight_constraints,
         use_ordered_encoding=ordered,
     )
@@ -164,12 +149,21 @@ def network_values_to_table(values: Dict, *, title: str = "") -> Table:
 
 
 @app.command(name="solve")
-def command_solve() -> None:
+def command_solve(
+        number_of_solutions: int = typer.Option(
+            0,
+            "--number-of-solutions",
+            "-s",
+            help="Maximum number of solutions to compute (0 for unbounded)",
+        ),
+) -> None:
     """
     Run the program and print solutions.
     """
+    validate('number_of_solutions', number_of_solutions, min_value=0)
+
     with console.status("Running..."):
-        res = app_options.controller.find_solutions()
+        res = app_options.controller.find_solutions(number_of_solutions)
     if not res:
         console.print('NO SOLUTIONS')
     for index, values in enumerate(res, start=1):

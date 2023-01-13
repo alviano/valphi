@@ -372,9 +372,9 @@ weighted_typicality_inclusion(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_
         return [truth_degree * self.number_of_clauses for truth_degree in range(self.number_of_clauses)]
 
     def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
-        output_nodes = Model.of_program(self.network_facts.as_strings + ("""
+        output_nodes = Model.of_program(self.network_facts.as_facts, """
 #show.
 #show Node : weighted_typicality_inclusion(Node,_,_).
-        """,))
+        """)
         for node in output_nodes:
             control.register_propagator(ValPhiPropagator(str(node), val_phi=val_phi))

@@ -51,7 +51,7 @@ def test_parse_network_with_exactly_one():
 
 
 def test_network_topology_as_facts():
-    facts = two_layers_three_nodes_network(with_exactly_one=True).network_facts.as_strings
+    facts = two_layers_three_nodes_network(with_exactly_one=True).network_facts.as_facts
     assert 'weighted_typicality_inclusion(l2_1,top,"10").' in facts
     assert 'weighted_typicality_inclusion(l2_1,l1_1,"20").' in facts
     assert 'weighted_typicality_inclusion(l2_1,l1_2,"-10").' in facts

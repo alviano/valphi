@@ -19,7 +19,6 @@ class Controller:
     network: NetworkInterface
     val_phi: List[float] = dataclasses.field(default_factory=lambda: Controller.default_val_phi())
     raw_code: str = dataclasses.field(default="")
-    max_stable_models: int = dataclasses.field(default=0)
     use_wc: bool = dataclasses.field(default=False)
     use_ordered_encoding: bool = dataclasses.field(default=False)
 
@@ -80,12 +79,12 @@ class Controller:
     def __setup_control(self, query: Optional[str] = None):
         # control = clingo.Control(["--opt-strategy=usc,k,4", "--opt-usc-shrink=rgs"] if query else [])
         control = clingo.Control()
-        control.configuration.solve.models = self.max_stable_models if query is None else 0
+        # control.configuration.solve.models = self.max_stable_models if query is None else 0
         control.add("base", ["max_value"], BASE_PROGRAM
                     + (QUERY_ENCODING if query and not self.use_ordered_encoding else "")
                     + (QUERY_ORDERED_ENCODING if query and self.use_ordered_encoding else "")
                     + (ORDERED_ENCODING if self.use_ordered_encoding else "")
-                    + '\n'.join(self.network.network_facts.as_strings)
+                    + self.network.network_facts.as_facts
                     + self.raw_code + ("" if query is None else f"query({query})."))
         control.ground([("base", [Number(self.max_value)])], context=Context())
         if self.use_wc:
@@ -99,7 +98,7 @@ class Controller:
     def __read_eval(self, model) -> frozendict:
         res = {}
         for symbol in model:
-            if symbol.name == "eval":
+            if symbol.predicate_name == "eval":
                 concept, individual, value = symbol.arguments
                 if concept.name in ["top", "bot"]:
                     continue
@@ -110,10 +109,12 @@ class Controller:
                     res[f"{concept}({individual})"] = f"{value.number}/{self.max_value}"
         return frozendict(res)
 
-    def find_solutions(self) -> List[frozendict]:
+    def find_solutions(self, max_number_of_solutions: int = 0) -> List[frozendict]:
+        validate('max_number_of_solutions', max_number_of_solutions, min_value=0)
         if type(self.network) is MaxSAT:
             raise ValueError("Use 'query even' for MaxSAT")
         control = self.__setup_control()
+        control.configuration.solve.models = max_number_of_solutions
         model_collect = ModelCollect()
         control.solve(on_model=model_collect)
         return [self.__read_eval(model) for model in model_collect]
@@ -136,12 +137,12 @@ class Controller:
         model = last_model.get()
         eval_values = self.__read_eval(model)
         for symbol in model:
-            if symbol.name == "query_false":
+            if symbol.predicate_name == "query_false":
                 return self.QueryResult.of_false(
                     left_concept_value=symbol.arguments[0].number / self.max_value,
                     assignment=eval_values,
                 )
-            elif symbol.name == "query_true":
+            elif symbol.predicate_name == "query_true":
                 return self.QueryResult.of_true(
                     left_concept_value=symbol.arguments[0].number / self.max_value,
                     assignment=eval_values,
