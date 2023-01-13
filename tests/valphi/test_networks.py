@@ -1,6 +1,6 @@
 import pytest
+from dumbo_asp.utils import ValidationError
 
-from valphi import utils
 from valphi.networks import NetworkTopology, MaxSAT, NetworkInterface
 
 
@@ -17,7 +17,7 @@ def two_layers_three_nodes_network(with_exactly_one: bool = False):
 
 
 def test_network_topology_must_start_with_add_node():
-    with pytest.raises(utils.ValidationError):
+    with pytest.raises(ValidationError):
         NetworkTopology().add_node()
 
     network = NetworkTopology().add_layer().add_node().complete()

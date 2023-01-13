@@ -1,9 +1,11 @@
 #!/bin/sh
 
-echo "Specify the environment name, or type ENTER to use valphi"
-read name
+project="valphi"
+
+echo "Specify the environment name, or type ENTER to use $project"
+read -r name
 if [ -z "$name" ]; then
-    name="valphi"
+    name="$project"
 fi
 
 conda create --name "$name" python=3.10 --yes

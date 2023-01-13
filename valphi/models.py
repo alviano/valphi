@@ -4,8 +4,7 @@ from typing import List, Iterable, Any, Tuple
 
 import clingo
 import typeguard
-
-from valphi import utils
+from dumbo_asp.utils import validate
 
 
 @typeguard.typechecked
@@ -17,7 +16,7 @@ class Model:
     __key = object
 
     def __post_init__(self, key: Any):
-        utils.validate("key", key, equals=self.__key)
+        validate("key", key, equals=self.__key)
         self.__value.sort()
 
     @staticmethod
@@ -35,7 +34,7 @@ class Model:
         control.ground([("base", [])])
         model_collect = ModelCollect()
         control.solve(on_model=model_collect)
-        utils.validate("one model", model_collect, length=1)
+        validate("one model", model_collect, length=1)
         return model_collect[0]
 
     def __str__(self):
@@ -121,7 +120,7 @@ class LastModel:
         return str(self.get()) if self.has() else 'NO SOLUTIONS'
 
     def get(self):
-        utils.validate('has', self.has(), equals=True)
+        validate('has', self.has(), equals=True)
         return self.__value[0]
 
     def has(self):

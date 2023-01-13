@@ -4,9 +4,9 @@ from typing import List, Tuple, Optional, Union, Any, Set, FrozenSet
 import clingo
 import typeguard
 from distlib.util import cached_property
+from dumbo_asp.utils import validate
 
-from valphi import utils
-from valphi.models import ModelCollect, Model
+from valphi.models import Model
 from valphi.propagators import ValPhiPropagator
 
 
@@ -31,19 +31,19 @@ class NetworkInterface:
         return res
 
     def complete(self):
-        utils.validate("complete", self.__complete[0], equals=False)
+        validate("complete", self.__complete[0], equals=False)
         self.__complete[0] = True
         return self
 
     @staticmethod
     def validate_parse_key(key: Any):
-        utils.validate("key", key, equals=NetworkInterface.__parse_key)
+        validate("key", key, equals=NetworkInterface.__parse_key)
 
     def validate_is_complete(self):
-        utils.validate("complete", self.__complete[0], equals=True)
+        validate("complete", self.__complete[0], equals=True)
 
     def validate_is_not_complete(self):
-        utils.validate("not complete", self.__complete[0], equals=False)
+        validate("not complete", self.__complete[0], equals=False)
 
     @cached_property
     def network_facts(self) -> Model:
@@ -121,25 +121,25 @@ class NetworkTopology(NetworkInterface):
 
     def add_node(self, weights: Optional[List[float]] = None) -> 'NetworkTopology':
         self.validate_is_not_complete()
-        utils.validate("has layer", self.__layers, min_len=1)
+        validate("has layer", self.__layers, min_len=1)
         if len(self.__layers) == 1:
-            utils.validate("weights", weights, enforce_not_none=False, equals=None)
+            validate("weights", weights, enforce_not_none=False, equals=None)
             self.__layers[-1].append([])
         else:
-            utils.validate("weights", weights, length=1 + len(self.__layers[-2]))
+            validate("weights", weights, length=1 + len(self.__layers[-2]))
             self.__layers[-1].append(weights)
         return self
 
     def add_exactly_one(self, input_nodes: List[int]) -> 'NetworkTopology':
         self.validate_is_not_complete()
-        utils.validate("has layer", self.__layers, min_len=1)
+        validate("has layer", self.__layers, min_len=1)
         weights = self.__get_layer(1)
-        utils.validate("has nodes", all(1 <= node <= len(weights) for node in input_nodes), equals=True)
+        validate("has nodes", all(1 <= node <= len(weights) for node in input_nodes), equals=True)
         self.__exactly_one.append(input_nodes)
         return self
 
     def __validate_layer_index(self, index) -> None:
-        utils.validate("index", index, min_value=1, max_value=len(self.__layers))
+        validate("index", index, min_value=1, max_value=len(self.__layers))
 
     def __get_layer(self, index) -> List[List[float]]:
         self.__validate_layer_index(index)
@@ -157,7 +157,7 @@ class NetworkTopology(NetworkInterface):
     def in_weights(self, layer: int, node: int) -> List[float]:
         self.validate_is_complete()
         weights = self.__get_layer(layer)
-        utils.validate("node", node, min_value=1, max_value=len(weights))
+        validate("node", node, min_value=1, max_value=len(weights))
         return weights[node - 1]
 
     def number_of_exactly_one(self) -> int:
@@ -166,7 +166,7 @@ class NetworkTopology(NetworkInterface):
 
     def nodes_in_exactly_one(self, index: int) -> List[int]:
         self.validate_is_complete()
-        utils.validate("index", index, min_value=0, max_value=len(self.__exactly_one) - 1)
+        validate("index", index, min_value=0, max_value=len(self.__exactly_one) - 1)
         return list(self.__exactly_one[index])
 
     @staticmethod
@@ -288,7 +288,7 @@ class MaxSAT(NetworkInterface):
                 continue
             if state == "clauses":
                 literals = [int(x) for x in line.split()]
-                utils.validate("terminated by 0", literals[-1] == 0)
+                validate("terminated by 0", literals[-1] == 0)
                 literals = literals[:-1]
                 res.add_clause(*literals)
         return res.complete()
@@ -300,7 +300,7 @@ class MaxSAT(NetworkInterface):
 
     def add_clause(self, *literals: int) -> 'MaxSAT':
         self.validate_is_not_complete()
-        utils.validate("cannot contain zero", any(x == 0 for x in literals), equals=False)
+        validate("cannot contain zero", any(x == 0 for x in literals), equals=False)
         self.__clauses.append(literals)
         return self
 
@@ -327,7 +327,8 @@ crisp(A) :- atom(A).   % weighted_typicality_inclusion(A,A, {max_value} + 1) :- 
 
 % clause satisfaction
 crisp(C) :- clause(C).
-weighted_typicality_inclusion(C,top,NegativeLiterals * {max_value}) :- clause(C), NegativeLiterals = #count{{A : clause_negative_literal(C,A)}}.
+weighted_typicality_inclusion(C,top,NegativeLiterals * {max_value}) :-
+    clause(C), NegativeLiterals = #count{{A : clause_negative_literal(C,A)}}.
 weighted_typicality_inclusion(C,A,{max_value}) :- clause(C), clause_positive_literal(C,A).
 weighted_typicality_inclusion(C,A,-{max_value}) :- clause(C), clause_negative_literal(C,A).
 
@@ -338,7 +339,8 @@ weighted_typicality_inclusion(sat,C,1) :- clause(C).
 crisp(even(0)).
 weighted_typicality_inclusion(even(0), top, {max_value}).
 
-% even'(i+1) = valphi(n * (1 - even_i + C(i+1) - 1)) = max(0, C(i+1) - even_i)   --- 1 if and only if ~even_i & C_i is true
+% even'(i+1) = valphi(n * (1 - even_i + C(i+1) - 1)) = max(0, C(i+1) - even_i)   
+%   --- 1 if and only if ~even_i & C_i is true
 crisp(even'(I+1)) :- I = 0..{max_value}-1.
 weighted_typicality_inclusion(even'(I+1),even(I),-{max_value}) :- I = 0..{max_value}-1.
 weighted_typicality_inclusion(even'(I+1),c(I+1),{max_value}) :- I = 0..{max_value}-1.
@@ -348,7 +350,8 @@ crisp(even''(I+1)) :- I = 0..{max_value}-1.
 weighted_typicality_inclusion(even''(I+1),even(I),{max_value}) :- I = 0..{max_value}-1.
 weighted_typicality_inclusion(even''(I+1),c(I+1),-{max_value}) :- I = 0..{max_value}-1.
 
-% even(i+1) = valphi(n * (even'(i+1) + even''(i+1))) = min(1, even'(i+1) + even''(i+1))    --- 1 if and only even'(i+1) | even''(i+1) is true
+% even(i+1) = valphi(n * (even'(i+1) + even''(i+1))) = min(1, even'(i+1) + even''(i+1))    
+%   --- 1 if and only even'(i+1) | even''(i+1) is true
 crisp(even(I+1)) :- I = 0..{max_value}-1.
 weighted_typicality_inclusion(even(I+1),even'(I+1),{max_value}) :- I = 0..{max_value}-1.
 weighted_typicality_inclusion(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_value}-1.

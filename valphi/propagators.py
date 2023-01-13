@@ -2,9 +2,7 @@ from typing import Optional, List
 
 import clingo
 from clingo.propagator import Propagator
-
-from valphi import utils
-from valphi.utils import validate
+from dumbo_asp.utils import validate
 
 
 class ValPhiPropagator(Propagator):
@@ -34,8 +32,8 @@ class ValPhiPropagator(Propagator):
 
     def __validate_max_value(self, init) -> None:
         max_value = max(s.symbol.arguments[0].number for s in init.symbolic_atoms.by_signature("truth_degree", 1))
-        utils.validate("max_value", max_value, equals=self.max_value,
-                       help_msg="The provided ValPhi doesn't match the number of truth values")
+        validate("max_value", max_value, equals=self.max_value,
+                 help_msg="The provided ValPhi doesn't match the number of truth values")
 
     def __read_input_nodes(self, init) -> None:
         for s in init.symbolic_atoms.by_signature("weighted_typicality_inclusion", 3):

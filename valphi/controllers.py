@@ -1,12 +1,13 @@
 import dataclasses
-from typing import List, Optional, Final, Union
+from typing import List, Optional, Final
 
 import clingo
+import dumbo_asp
 import typeguard
 from clingo.symbol import Number
+from dumbo_asp.utils import validate
 from pydot import frozendict
 
-from valphi import utils
 from valphi.contexts import Context
 from valphi.models import ModelCollect, LastModel
 from valphi.networks import NetworkTopology, MaxSAT, NetworkInterface
@@ -61,14 +62,12 @@ class Controller:
             )
 
     def __post_init__(self):
-        utils.validate("max_value", self.max_value, min_value=1, max_value=1000)
-        utils.validate("val_phi", self.val_phi, equals=sorted(self.val_phi))
-        utils.validate("val-phi must be integer", all(type(value) is int or value.is_integer()
-                                                      for value in self.val_phi),
-                       equals=True,
-                       help_msg="Weight-constraints requires an integer val-phi")
+        validate("max_value", self.max_value, min_value=1, max_value=1000)
+        validate("val_phi", self.val_phi, equals=sorted(self.val_phi))
+        validate("val-phi must be integer", all(type(value) is int or value.is_integer() for value in self.val_phi),
+                 equals=True, help_msg="Weight-constraints requires an integer val-phi")
         if type(self.network) is MaxSAT:
-            utils.validate("", self.val_phi, equals=self.network.val_phi)
+            validate("", self.val_phi, equals=self.network.val_phi)
 
     @staticmethod
     def default_val_phi() -> List[float]:
@@ -121,10 +120,10 @@ class Controller:
 
     def answer_query(self, query: str) -> QueryResult:
         if type(self.network) is MaxSAT:
-            utils.validate("query", query, equals="even")
+            validate("query", query, equals="even")
             query = self.network.query
-        utils.validate("query", query, custom=[utils.pattern(r"[^#]+#[^#]+#(<|<=|>=|>|=|!=)#(1|1.0|0\.\d+)")],
-                       help_msg=f'The query "{query}" is not in the expected format. Is it a filename?')
+        validate("query", query, custom=[dumbo_asp.utils.pattern(r"[^#]+#[^#]+#(<|<=|>=|>|=|!=)#(1|1.0|0\.\d+)")],
+                 help_msg=f'The query "{query}" is not in the expected format. Is it a filename?')
         left, right, comparator, threshold = query.split('#')
         control = self.__setup_control(f'{left},{right},"{comparator}","{threshold}"')
 
@@ -224,7 +223,8 @@ concept_inclusion(C,D,"<=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Oper
     eval(impl(C,D),_,V), @gt(V,max_value, Alpha) != 1.
 :- assertion(C,X,Operator,Alpha); eval(C,X,V), @apply_operator(V,max_value, Operator,Alpha) != 1.
 
-% support exactly-one constraints encoded as exactly_one(ID). exactly_one_element(ID,Concept). ... exactly_one_element(ID,Concept).
+% support exactly-one constraints encoded as 
+%   exactly_one(ID). exactly_one_element(ID,Concept). ... exactly_one_element(ID,Concept).
 :- exactly_one(ID), individual(X), #count{Concept : exactly_one_element(ID,Concept), eval(Concept,X,max_value)} != 1.
 
 % verify if there is a counterexample for the right-hand-side concept of the query
@@ -302,8 +302,10 @@ premise_greater_than_conclusion(A,B,X) :-
     concept(impl(A,B)), individual(X);
     eval_ge(A,X,V);
     not eval_ge(B,X,V).
-:- concept(impl(A,B)), individual(X); eval_ge(impl(A,B),X,V); premise_greater_than_conclusion(A,B,X); not eval_ge(B,X,V).
-:- concept(impl(A,B)), individual(X), truth_degree(V), V > 0; not premise_greater_than_conclusion(A,B,X); not eval_ge(impl(A,B),X,V).
+:- concept(impl(A,B)), individual(X); 
+   eval_ge(impl(A,B),X,V); premise_greater_than_conclusion(A,B,X); not eval_ge(B,X,V).
+:- concept(impl(A,B)), individual(X), truth_degree(V), V > 0; 
+   not premise_greater_than_conclusion(A,B,X); not eval_ge(impl(A,B),X,V).
 :- concept(impl(A,B)), individual(X); eval_ge(B,X,V); not eval_ge(impl(A,B),X,V).
 """
 

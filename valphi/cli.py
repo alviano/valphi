@@ -3,12 +3,11 @@ from pathlib import Path
 from typing import List, Optional, Dict
 
 import typer
+from dumbo_asp.utils import console, validate
 from rich.table import Table
 
-from valphi import utils
 from valphi.controllers import Controller
 from valphi.networks import NetworkTopology, ArgumentationGraph, MaxSAT, NetworkInterface
-from valphi.utils import console
 
 
 @dataclasses.dataclass(frozen=True)
@@ -78,18 +77,18 @@ def main(
     """
     global app_options
 
-    utils.validate('number_of_solutions', number_of_solutions, min_value=0)
-    # utils.validate('max_value', max_value, min_value=0)
-    utils.validate('network_filename', network_filename.exists() and network_filename.is_file(), equals=True,
-                   help_msg=f"File {network_filename} does not exists")
+    validate('number_of_solutions', number_of_solutions, min_value=0)
+    # validate('max_value', max_value, min_value=0)
+    validate('network_filename', network_filename.exists() and network_filename.is_file(), equals=True,
+             help_msg=f"File {network_filename} does not exists")
     for filename in filenames:
-        utils.validate('filenames', filename.exists() and filename.is_file(), equals=True,
-                       help_msg=f"File {filename} does not exists")
+        validate('filenames', filename.exists() and filename.is_file(), equals=True,
+                 help_msg=f"File {filename} does not exists")
 
     val_phi = Controller.default_val_phi()
     if val_phi_filename is not None:
-        utils.validate('val_phi_filename', val_phi_filename.exists() and val_phi_filename.is_file(), equals=True,
-                       help_msg=f"File {val_phi_filename} does not exists")
+        validate('val_phi_filename', val_phi_filename.exists() and val_phi_filename.is_file(), equals=True,
+                 help_msg=f"File {val_phi_filename} does not exists")
         with open(val_phi_filename) as f:
             val_phi = [float(x) for x in f.readlines() if x]
 
@@ -103,7 +102,7 @@ def main(
         network = NetworkInterface.parse(network_filename_lines)
 
     if type(network) is MaxSAT:
-        utils.validate("val_phi cannot be changed for MaxSAT", val_phi_filename is None, equals=True)
+        validate("val_phi cannot be changed for MaxSAT", val_phi_filename is None, equals=True)
         val_phi = network.val_phi
 
     controller = Controller(
@@ -193,14 +192,13 @@ def command_query(
     """
     Answer the provided query.
     """
-    utils.validate("query", query is None and query_filename is None, equals=False,
-                   help_msg="No query was given")
-    utils.validate("query", query is not None and query_filename is not None, equals=False,
-                   help_msg="Option --query-filename cannot be used if the query is given from the command line")
+    validate("query", query is None and query_filename is None, equals=False, help_msg="No query was given")
+    validate("query", query is not None and query_filename is not None, equals=False,
+             help_msg="Option --query-filename cannot be used if the query is given from the command line")
 
     if query_filename is not None:
-        utils.validate("query_filename", query_filename.exists() and query_filename.is_file(), equals=True,
-                       help_msg=f"File {query_filename} does not exists")
+        validate("query_filename", query_filename.exists() and query_filename.is_file(), equals=True,
+                 help_msg=f"File {query_filename} does not exists")
         with open(query_filename) as f:
             query = ''.join(x.strip() for x in f.readlines())
 

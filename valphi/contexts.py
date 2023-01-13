@@ -1,7 +1,7 @@
 import clingo
 from clingo import Number
 
-from valphi.utils import validate
+from dumbo_asp.utils import validate
 
 
 class Context:
