@@ -56,7 +56,7 @@ def main(
         ),
         weight_constraints: bool = typer.Option(False, help="Use weight constraints instead of ad-hoc propagator"),
         ordered: bool = typer.Option(False, help="Add ordered encoding for eval/3"),
-        debug: bool = typer.Option(False, "--debug", help="Don't minimize browser"),
+        debug: bool = typer.Option(False, "--debug", help="Show stacktrace and debug info"),
 ):
     """
     Neural Network evaluation under fuzzy semantics.
