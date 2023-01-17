@@ -1,17 +1,13 @@
 [tool.poetry]
 name = "valphi"
-version = "0.3.22"
+version = "0.3.23"
 description = "Logic programs ralying on ValPhi semantics"
 authors = ["Mario Alviano <mario.alviano@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-typer = "^0.7.0"
-rich = "^13.0.1"
-typeguard = "^2.13.3"
-valid8 = "^5.1.2"
 pydot = "^1.4.2"
-dumbo-asp = "^0.0.8"
+dumbo-asp = "^0.0.9"
 
 [tool.poetry.dev-dependencies]
 coverage = "^7.0.4"

@@ -2,7 +2,7 @@ from typing import Optional, List
 
 import clingo
 from clingo.propagator import Propagator
-from dumbo_asp.utils import validate
+from dumbo_utils.validation import validate
 
 
 class ValPhiPropagator(Propagator):

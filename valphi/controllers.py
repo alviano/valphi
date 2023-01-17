@@ -2,10 +2,9 @@ import dataclasses
 from typing import List, Optional, Final
 
 import clingo
-import dumbo_asp
 import typeguard
 from clingo.symbol import Number
-from dumbo_asp.utils import validate
+from dumbo_utils.validation import validate, pattern
 from pydot import frozendict
 
 from valphi.contexts import Context
@@ -123,7 +122,7 @@ class Controller:
         if type(self.network) is MaxSAT:
             validate("query", query, equals="even")
             query = self.network.query
-        validate("query", query, custom=[dumbo_asp.utils.pattern(r"[^#]+#[^#]+#(<|<=|>=|>|=|!=)#(1|1.0|0\.\d+)")],
+        validate("query", query, custom=[pattern(r"[^#]+#[^#]+#(<|<=|>=|>|=|!=)#(1|1.0|0\.\d+)")],
                  help_msg=f'The query "{query}" is not in the expected format. Is it a filename?')
         left, right, comparator, threshold = query.split('#')
         control = self.__setup_control(f'{left},{right},"{comparator}","{threshold}"')

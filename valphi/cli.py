@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import List, Optional, Dict
 
 import typer
-from dumbo_asp.utils import console, validate
+from dumbo_utils.validation import validate
+from dumbo_utils.console import console
 from rich.table import Table
 
 from valphi.controllers import Controller

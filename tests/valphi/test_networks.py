@@ -1,5 +1,5 @@
 import pytest
-from dumbo_asp.utils import ValidationError
+from dumbo_utils.validation import ValidationError
 
 from valphi.networks import NetworkTopology, MaxSAT, NetworkInterface
 

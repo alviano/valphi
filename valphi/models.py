@@ -1,11 +1,9 @@
 import dataclasses
-from dataclasses import InitVar
-from typing import List, Iterable, Any, Tuple
+from typing import List, Iterable
 
-import clingo
 import typeguard
 from dumbo_asp.primitives import Model
-from dumbo_asp.utils import validate
+from dumbo_utils.validation import validate
 
 
 @typeguard.typechecked

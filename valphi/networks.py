@@ -4,7 +4,7 @@ from typing import List, Tuple, Optional, Union, Any, Set, FrozenSet
 import clingo
 import typeguard
 from distlib.util import cached_property
-from dumbo_asp.utils import validate
+from dumbo_utils.validation import validate
 
 from valphi.models import Model
 from valphi.propagators import ValPhiPropagator

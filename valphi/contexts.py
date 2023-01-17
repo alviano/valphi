@@ -1,7 +1,7 @@
 import clingo
 from clingo import Number
 
-from dumbo_asp.utils import validate
+from dumbo_utils.validation import validate
 
 
 class Context:
