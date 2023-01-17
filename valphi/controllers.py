@@ -5,12 +5,12 @@ import clingo
 import dumbo_asp
 import typeguard
 from clingo.symbol import Number
-from dumbo_asp.utils import validate
+from dumbo_asp.utils import validate, pattern
 from pydot import frozendict
 
 from valphi.contexts import Context
 from valphi.models import ModelCollect, LastModel
-from valphi.networks import NetworkTopology, MaxSAT, NetworkInterface
+from valphi.networks import NetworkTopology, MaxSAT, NetworkInterface, ArgumentationGraph
 
 
 @typeguard.typechecked
@@ -105,6 +105,10 @@ class Controller:
                 if type(self.network) is NetworkTopology:
                     layer, node = concept.name[1:].split('_', maxsplit=1)
                     res[(int(layer), int(node))] = value.number
+                elif type(self.network) is ArgumentationGraph:
+                    validate("format", concept.name, custom=[pattern(r"a[0-9]+")],
+                             help_msg="The format of the argument is wrong")
+                    res[concept.name] = f"{value.number}/{self.max_value}"
                 else:
                     res[f"{concept}({individual})"] = f"{value.number}/{self.max_value}"
         return frozendict(res)
