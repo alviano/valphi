@@ -1,2 +1,2 @@
-:- not eval(l1_1,max_value).
-:- not eval(l2_1,max_value).
+:- not eval(a1,max_value).
+:- not eval(a2,max_value).
