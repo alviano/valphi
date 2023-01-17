@@ -108,6 +108,7 @@ class Controller:
                 elif type(self.network) is ArgumentationGraph:
                     validate("format", concept.name, custom=[pattern(r"a[0-9]+")],
                              help_msg="The format of the argument is wrong")
+                    validate("format", concept.arguments, length=0, help_msg="The format of the argument is wrong")
                     res[concept.name] = f"{value.number}/{self.max_value}"
                 else:
                     res[f"{concept}({individual})"] = f"{value.number}/{self.max_value}"
