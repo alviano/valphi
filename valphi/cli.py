@@ -131,7 +131,7 @@ def network_values_to_table(values: Dict, *, title: str = "") -> Table:
         for node, _ in enumerate(network.arguments, start=1):
             table.add_row(
                 str(node),
-                str(values[f"{network.term(node)}(anonymous)"]),
+                str(values[f"{network.term(node)}"]),
             )
     elif type(network) is MaxSAT:
         table.add_column("# of satisfied clauses / Atom / Clause")

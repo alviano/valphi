@@ -9,7 +9,7 @@ from pydot import frozendict
 
 from valphi.contexts import Context
 from valphi.models import ModelCollect, LastModel
-from valphi.networks import NetworkTopology, MaxSAT, NetworkInterface
+from valphi.networks import NetworkTopology, MaxSAT, NetworkInterface, ArgumentationGraph
 
 
 @typeguard.typechecked
@@ -104,6 +104,11 @@ class Controller:
                 if type(self.network) is NetworkTopology:
                     layer, node = concept.name[1:].split('_', maxsplit=1)
                     res[(int(layer), int(node))] = value.number
+                elif type(self.network) is ArgumentationGraph:
+                    validate("format", concept.name, custom=[pattern(r"a[0-9]+")],
+                             help_msg="The format of the argument is wrong")
+                    validate("format", concept.arguments, length=0, help_msg="The format of the argument is wrong")
+                    res[concept.name] = f"{value.number}/{self.max_value}"
                 else:
                     res[f"{concept}({individual})"] = f"{value.number}/{self.max_value}"
         return frozendict(res)
@@ -122,7 +127,7 @@ class Controller:
         if type(self.network) is MaxSAT:
             validate("query", query, equals="even")
             query = self.network.query
-        validate("query", query, custom=[pattern(r"[^#]+#[^#]+#(<|<=|>=|>|=|!=)#(1|1.0|0\.\d+)")],
+        validate("query", query, custom=[dumbo_asp.utils.pattern(r"[^#]+#[^#]+#(<|<=|>=|>|=|!=)#(1|1.0|0\.\d+)")],
                  help_msg=f'The query "{query}" is not in the expected format. Is it a filename?')
         left, right, comparator, threshold = query.split('#')
         control = self.__setup_control(f'{left},{right},"{comparator}","{threshold}"')

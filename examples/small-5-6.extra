@@ -1,6 +1,6 @@
-concept(and(l1_1,l2_1)).
+concept(and(a1,a2)).
 
-:~ eval(and(l1_1,l2_1),V). [-1@V+2, V]
+:~ eval(and(a1,a2),V). [-1@V+2, V]
 
-:~ Alpha = "0.4", eval(l5_1,V), @gt(V,max_value, Alpha) = 1. [-1@1, Alpha,V]
+:~ Alpha = "0.4", eval(a5,V), @gt(V,max_value, Alpha) = 1. [-1@1, Alpha,V]
 

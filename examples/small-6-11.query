@@ -1,6 +1,6 @@
-l4_1
+a4
 #
-and(l1_1,and(l2_1,neg(l3_1)))
+and(a1,and(a2,neg(a3)))
 #
 >=
 #
