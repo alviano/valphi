@@ -133,7 +133,7 @@ class Controller:
         if type(self.network) is MaxSAT:
             validate("query", query, equals="even")
             query = self.network.query
-        validate("query", query, custom=[pattern(r"[^#]+#[^#]+#(<|<=|>=|>|=|!=)#(1|1.0|0\.\d+)")],
+        validate("query", query, custom=[pattern(r"[^#]+#[^#]+#(<|<=|>=|>)#(1|1.0|0\.\d+)")],
                  help_msg=f'The query "{query}" is not in the expected format. Is it a filename?')
         left, right, comparator, threshold = query.split('#')
         control = self.__setup_control(f'{left},{right},"{comparator}","{threshold}"')
@@ -270,18 +270,7 @@ eval(impl(A,B),X, @implication(V1,V2, max_value))
        typical_element(C,X), eval(impl(C,D),X,V), @le(V,max_value, Alpha) = 1.
     query_true :- query(C,D,Operator,Alpha), Operator = "<";
        typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1.
-    
-    % disable = and != for now
-    :-  query(C,D,Operator,Alpha), Operator = "=".
-    :-  query(C,D,Operator,Alpha), Operator = "!=".
-    query_false :- query(C,D,Operator,Alpha), Operator = "=";
-       typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1.
-    query_false :- query(C,D,Operator,Alpha), Operator = "=";
-       #count{X : typical_element(C,X), eval(impl(C,D),X,V), @eq(V,max_value, Alpha) = 1} = 0.
-    query_false :- query(C,D,Operator,Alpha), Operator = "!=";
-       #count{X : typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0;
-       #count{X : typical_element(C,X), eval(impl(C,D),X,V), @eq(V,max_value, Alpha) = 1} > 0.
-       
+           
     counter_example :- query_true. 
     counter_example :- query_false. 
     :~ counter_example. [-1@1] 
