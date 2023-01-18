@@ -113,6 +113,12 @@ class Controller:
                     res[f"{concept}({individual})"] = f"{value.number}/{self.max_value}"
         return frozendict(res)
 
+    @staticmethod
+    def __read_typical(model) -> int:
+        for symbol in model:
+            if symbol.predicate_name == "typical":
+                return symbol.arguments[0].number
+
     def find_solutions(self, max_number_of_solutions: int = 0) -> List[frozendict]:
         validate('max_number_of_solutions', max_number_of_solutions, min_value=0)
         if type(self.network) is MaxSAT:
@@ -140,15 +146,16 @@ class Controller:
 
         model = last_model.get()
         eval_values = self.__read_eval(model)
+        left_concept_value = self.__read_typical(model)
         for symbol in model:
             if symbol.predicate_name == "query_false":
                 return self.QueryResult.of_false(
-                    left_concept_value=symbol.arguments[0].number / self.max_value,
+                    left_concept_value=left_concept_value / self.max_value,
                     assignment=eval_values,
                 )
             elif symbol.predicate_name == "query_true":
                 return self.QueryResult.of_true(
-                    left_concept_value=symbol.arguments[0].number / self.max_value,
+                    left_concept_value=left_concept_value / self.max_value,
                     assignment=eval_values,
                 )
 
@@ -212,50 +219,86 @@ eval(neg(A),   X, max_value-V1) :- concept(neg(A)),   individual(X), eval(A,X,V1
 eval(impl(A,B),X, @implication(V1,V2, max_value))
     :- concept(impl(A,B)), individual(X), eval(A,X,V1), eval(B,X,V2).
 
-% TBox and ABox axioms
-:- concept_inclusion(C,D,Operator,Alpha), Operator = ">="; 
-    eval(impl(C,D),X,V), @ge(V,max_value, Alpha) != 1.
-:- concept_inclusion(C,D,Operator,Alpha), Operator = ">"; 
-    eval(impl(C,D),X,V), @gt(V,max_value, Alpha) != 1.
-:- concept_inclusion(C,D,Operator,Alpha), Operator = "<="; 
-    #count{X : individual(X), eval(impl(C,D),X,V), @le(V,max_value, Alpha) = 1} = 0.
-:- concept_inclusion(C,D,Operator,Alpha), Operator = "<"; 
-    #count{X : individual(X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0.
-concept_inclusion(C,D,">=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=". 
-concept_inclusion(C,D,"<=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=". 
-:- concept_inclusion(C,D,Operator,Alpha), Operator = "!=";
-    #count{X : individual(X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0;
-    eval(impl(C,D),_,V), @gt(V,max_value, Alpha) != 1.
-:- assertion(C,X,Operator,Alpha); eval(C,X,V), @apply_operator(V,max_value, Operator,Alpha) != 1.
+% TBox and ABox axioms : begin
+    % TBox axioms with >= or > are essentially enforced on all individuals 
+    :- concept_inclusion(C,D,Operator,Alpha), Operator = ">="; 
+        eval(impl(C,D),X,V), @ge(V,max_value, Alpha) != 1.
+    :- concept_inclusion(C,D,Operator,Alpha), Operator = ">"; 
+        eval(impl(C,D),X,V), @gt(V,max_value, Alpha) != 1.
+        
+    % TBox axioms with <= and < are associated with their own individuals, and enforced on them
+    individual(anonymous(concept_inclusion(C,D,Operator,Alpha))) :- 
+        concept_inclusion(C,D,Operator,Alpha), Operator = "<=". 
+    individual(anonymous(concept_inclusion(C,D,Operator,Alpha))) :- 
+        concept_inclusion(C,D,Operator,Alpha), Operator = "<". 
+    :- concept_inclusion(C,D,Operator,Alpha), Operator = "<="; X = concept_inclusion(C,D,Operator,Alpha);
+        eval(impl(C,D),X,V), @le(V,max_value, Alpha) != 1.
+    :- concept_inclusion(C,D,Operator,Alpha), Operator = "<"; X = concept_inclusion(C,D,Operator,Alpha);
+        eval(impl(C,D),X,V), @lt(V,max_value, Alpha) != 1.
+        
+    % TBox axioms with = are syntactic sugar for <= AND >=
+    concept_inclusion(C,D,">=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=". 
+    concept_inclusion(C,D,"<=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=". 
+    
+    % TBox axioms with != are syntactic sugar for < OR >
+    individual(anonymous(concept_inclusion(C,D,Operator,Alpha))) :- 
+        concept_inclusion(C,D,Operator,Alpha), Operator = "!=".
+    :- concept_inclusion(C,D,Operator,Alpha), Operator = "!="; X = individual(concept_inclusion(C,D,Operator,Alpha));
+        eval(impl(C,D),X,V), @lt(V,max_value, Alpha) != 1;
+        eval(impl(C,D),_,V'), @gt(V',max_value, Alpha) != 1.
+    
+    % ABox axioms are applied to specific concepts and individuals, so we just enforce the required condition
+    :- assertion(C,X,Operator,Alpha); eval(C,X,V), @apply_operator(V,max_value, Operator,Alpha) != 1.
+% TBox and ABox axioms : end
 
 % support exactly-one constraints encoded as 
 %   exactly_one(ID). exactly_one_element(ID,Concept). ... exactly_one_element(ID,Concept).
 :- exactly_one(ID), individual(X), #count{Concept : exactly_one_element(ID,Concept), eval(Concept,X,max_value)} != 1.
 
-% verify if there is a counterexample for the right-hand-side concept of the query
-typical_element(C,X) :- query(C,_,_,_), eval(C,X,V), V = #max{V' : eval(C,X',V')}.
-query_false :- query(C,D,Operator,Alpha), Operator = ">=";
-   typical_element(C,X), eval(impl(C,D),X,V), @ge(V,max_value, Alpha) != 1.
-query_false :- query(C,D,Operator,Alpha), Operator = ">";
-   typical_element(C,X), eval(impl(C,D),X,V), @gt(V,max_value, Alpha) != 1.
-query_false :- query(C,D,Operator,Alpha), Operator = "<=";
-   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @le(V,max_value, Alpha) = 1} = 0.
-query_false :- query(C,D,Operator,Alpha), Operator = "<";
-   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0.
-query_false :- query(C,D,Operator,Alpha), Operator = "=";
-   typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1.
-query_false :- query(C,D,Operator,Alpha), Operator = "=";
-   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @eq(V,max_value, Alpha) = 1} = 0.
-query_false :- query(C,D,Operator,Alpha), Operator = "!=";
-   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0;
-   #count{X : typical_element(C,X), eval(impl(C,D),X,V), @eq(V,max_value, Alpha) = 1} > 0.
-:~ query_false. [-1@1] 
+% query counterexample : begin
+    % C-typical elements are those with the highest truth degree
+    typical_element(C,X) :- query(C,_,_,_), eval(C,X,V), V = #max{V' : eval(C,X',V')}.
+    
+    % if the query is >= or >, search for a counterexample falsifying the query
+    query_false :- query(C,D,Operator,Alpha), Operator = ">=";
+       typical_element(C,X), eval(impl(C,D),X,V), @ge(V,max_value, Alpha) != 1.
+    query_false :- query(C,D,Operator,Alpha), Operator = ">";
+       typical_element(C,X), eval(impl(C,D),X,V), @gt(V,max_value, Alpha) != 1.
+    
+    % if the query is <= or <, search for a counterexample making the query true
+    query_true :- query(C,D,Operator,Alpha), Operator = "<=";
+       typical_element(C,X), eval(impl(C,D),X,V), @le(V,max_value, Alpha) = 1.
+    query_true :- query(C,D,Operator,Alpha), Operator = "<";
+       typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1.
+    
+    % disable = and != for now
+    :-  query(C,D,Operator,Alpha), Operator = "=".
+    :-  query(C,D,Operator,Alpha), Operator = "!=".
+    query_false :- query(C,D,Operator,Alpha), Operator = "=";
+       typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1.
+    query_false :- query(C,D,Operator,Alpha), Operator = "=";
+       #count{X : typical_element(C,X), eval(impl(C,D),X,V), @eq(V,max_value, Alpha) = 1} = 0.
+    query_false :- query(C,D,Operator,Alpha), Operator = "!=";
+       #count{X : typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1} = 0;
+       #count{X : typical_element(C,X), eval(impl(C,D),X,V), @eq(V,max_value, Alpha) = 1} > 0.
+       
+    counter_example :- query_true. 
+    counter_example :- query_false. 
+    :~ counter_example. [-1@1] 
+% query counterexample : end
 
 
 #show.
 #show eval(C,X,V) : eval(C,X,V), concept(C), @is_named_concept(C) = 1.
-#show query_true (V) : not query_false, query(C,D,_,Alpha), typical_element(C,X), eval(C,X,V).
-#show query_false(V) :  query_false, query(C,D,_,Alpha), typical_element(C,X), eval(C,X,V).
+#show typical(V) : typical_element(C,X), eval(C,X,V).
+#show query_true: query_true.
+#show query_true: query(C,D,Operator,Alpha), Operator = ">=", not query_false.
+#show query_true: query(C,D,Operator,Alpha), Operator = ">", not query_false.
+#show query_false: query_false.
+#show query_false: query(C,D,Operator,Alpha), Operator = "<=", not query_true.
+#show query_false: query(C,D,Operator,Alpha), Operator = "<", not query_true.
+
+
 
 % prevent these warnings
 individual(0) :- #false.

@@ -242,9 +242,37 @@ def test_concept_inclusion_with_individuals():
         use_wc=True,
         use_ordered_encoding=False,
         raw_code="""
-                assertion(c,a,">=","1").
-                assertion(d,a,">=","0").
-                assertion(d,a,"<","1").
-            """
+            assertion(c,a,">=","1").
+            assertion(d,a,">=","0").
+            assertion(d,a,"<","1").
+        """
     ).answer_query("c#d#<#1.0")
     assert res.true
+
+
+def test_concept_inclusions_with_less_than():
+    res = Controller(
+        network=EmptyNetwork(),
+        use_wc=True,
+        use_ordered_encoding=False,
+        raw_code="""
+            concept_inclusion(top, or(a,b), ">=", "1").
+            concept_inclusion(a, b, "<", "1").
+            concept_inclusion(b, a, "<", "1").
+        """
+    ).find_solutions(1)
+    assert res
+
+
+def test_concept_inclusions_with_less_than_or_equal():
+    res = Controller(
+        network=EmptyNetwork(),
+        use_wc=True,
+        use_ordered_encoding=False,
+        raw_code="""
+            concept_inclusion(top, or(a,b), ">=", "1").
+            concept_inclusion(a, b, "<=", "0.5").
+            concept_inclusion(b, a, "<=", "0.5").
+        """
+    ).find_solutions(1)
+    assert res
