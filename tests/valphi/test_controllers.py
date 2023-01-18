@@ -276,3 +276,15 @@ def test_concept_inclusions_with_less_than_or_equal():
         """
     ).find_solutions(1)
     assert res
+
+
+def test_query_with_less_than_or_equal():
+    res = Controller(
+        network=EmptyNetwork(),
+        use_wc=True,
+        use_ordered_encoding=False,
+        raw_code="""
+            concept_inclusion(a, bot, ">=", "1").
+        """
+    ).answer_query("a#b#<=#1")
+    assert res

@@ -255,8 +255,8 @@ eval(impl(A,B),X, @implication(V1,V2, max_value))
 %   exactly_one(ID). exactly_one_element(ID,Concept). ... exactly_one_element(ID,Concept).
 :- exactly_one(ID), individual(X), #count{Concept : exactly_one_element(ID,Concept), eval(Concept,X,max_value)} != 1.
 
-% query counterexample : begin
-    % C-typical elements are those with the highest truth degree
+% query witness : begin
+    % typical C-elements are those with the highest truth degree
     typical_element(C,X) :- query(C,_,_,_), eval(C,X,V), V = #max{V' : eval(C,X',V')}.
     
     % if the query is >= or >, search for a counterexample falsifying the query
@@ -271,10 +271,10 @@ eval(impl(A,B),X, @implication(V1,V2, max_value))
     query_true :- query(C,D,Operator,Alpha), Operator = "<";
        typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1.
            
-    counter_example :- query_true. 
-    counter_example :- query_false. 
-    :~ counter_example. [-1@1] 
-% query counterexample : end
+    witness :- query_true. 
+    witness :- query_false. 
+    :~ witness. [-1@1] 
+% query witness : end
 
 
 #show.
