@@ -1,9 +1,11 @@
 import dataclasses
+from dataclasses import InitVar
 from typing import List, Optional, Final
 
 import clingo
 import typeguard
 from clingo.symbol import Number
+from dumbo_utils.primitives import PrivateKey
 from dumbo_utils.validation import validate, pattern
 from pydot import frozendict
 
@@ -24,10 +26,16 @@ class Controller:
     @typeguard.typechecked
     @dataclasses.dataclass(frozen=True)
     class QueryResult:
+        key: InitVar[PrivateKey]
         true: bool
         consistent_knowledge_base: bool
         left_concept_value: Optional[float]
         assignment: frozendict = dataclasses.field(default_factory=frozendict)
+
+        __key = PrivateKey()
+
+        def __post_init__(self, key: PrivateKey):
+            self.__key.validate(key)
 
         @property
         def false(self):
@@ -36,6 +44,7 @@ class Controller:
         @staticmethod
         def of_true(left_concept_value: float, assignment: frozendict) -> 'Controller.QueryResult':
             return Controller.QueryResult(
+                key=Controller.QueryResult.__key,
                 true=True,
                 consistent_knowledge_base=True,
                 left_concept_value=left_concept_value,
@@ -45,6 +54,7 @@ class Controller:
         @staticmethod
         def of_false(left_concept_value: float, assignment: frozendict) -> 'Controller.QueryResult':
             return Controller.QueryResult(
+                key=Controller.QueryResult.__key,
                 true=False,
                 consistent_knowledge_base=True,
                 left_concept_value=left_concept_value,
@@ -54,6 +64,7 @@ class Controller:
         @staticmethod
         def of_inconsistent_knowledge_base() -> 'Controller.QueryResult':
             return Controller.QueryResult(
+                key=Controller.QueryResult.__key,
                 true=True,
                 consistent_knowledge_base=False,
                 left_concept_value=None,
@@ -147,17 +158,13 @@ class Controller:
         model = last_model.get()
         eval_values = self.__read_eval(model)
         left_concept_value = self.__read_typical(model)
-        for symbol in model:
-            if symbol.predicate_name == "query_false":
-                return self.QueryResult.of_false(
-                    left_concept_value=left_concept_value / self.max_value,
-                    assignment=eval_values,
-                )
-            elif symbol.predicate_name == "query_true":
-                return self.QueryResult.of_true(
-                    left_concept_value=left_concept_value / self.max_value,
-                    assignment=eval_values,
-                )
+        witness = len(model.filter(lambda atom: atom.predicate_name == "witness")) > 0
+        factory_method = self.QueryResult.of_false if witness == (comparator in [">", ">="]) \
+            else self.QueryResult.of_true
+        return factory_method(
+            left_concept_value=left_concept_value / self.max_value,
+            assignment=eval_values,
+        )
 
     def __generate_wc(self):
         res = [f"val_phi(0,#inf,{int(self.val_phi[0])})."]
@@ -221,14 +228,14 @@ eval(impl(A,B),X, @implication(V1,V2, max_value))
 
 % TBox and ABox axioms : begin
     % TBox axioms with >= or > are essentially enforced on all individuals 
-    :- concept_inclusion(C,D,Operator,Alpha), Operator = ">="; 
+    :- concept_inclusion(C,D,Operator,Alpha), Operator = ">=", @lt(0,max_value, Alpha) = 1; 
         eval(impl(C,D),X,V), @ge(V,max_value, Alpha) != 1.
     :- concept_inclusion(C,D,Operator,Alpha), Operator = ">"; 
         eval(impl(C,D),X,V), @gt(V,max_value, Alpha) != 1.
         
     % TBox axioms with <= and < are associated with their own individuals, and enforced on them
     individual(anonymous(concept_inclusion(C,D,Operator,Alpha))) :- 
-        concept_inclusion(C,D,Operator,Alpha), Operator = "<=". 
+        concept_inclusion(C,D,Operator,Alpha), Operator = "<=", @gt(max_value,max_value, Alpha) = 1. 
     individual(anonymous(concept_inclusion(C,D,Operator,Alpha))) :- 
         concept_inclusion(C,D,Operator,Alpha), Operator = "<". 
     :- concept_inclusion(C,D,Operator,Alpha), Operator = "<="; X = concept_inclusion(C,D,Operator,Alpha);
@@ -237,8 +244,8 @@ eval(impl(A,B),X, @implication(V1,V2, max_value))
         eval(impl(C,D),X,V), @lt(V,max_value, Alpha) != 1.
         
     % TBox axioms with = are syntactic sugar for <= AND >=
-    concept_inclusion(C,D,">=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=". 
-    concept_inclusion(C,D,"<=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=". 
+    concept_inclusion(C,D,">=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=".
+    concept_inclusion(C,D,"<=",Alpha) :- concept_inclusion(C,D,Operator,Alpha), Operator = "=".
     
     % TBox axioms with != are syntactic sugar for < OR >
     individual(anonymous(concept_inclusion(C,D,Operator,Alpha))) :- 
@@ -260,19 +267,17 @@ eval(impl(A,B),X, @implication(V1,V2, max_value))
     typical_element(C,X) :- query(C,_,_,_), eval(C,X,V), V = #max{V' : eval(C,X',V')}.
     
     % if the query is >= or >, search for a counterexample falsifying the query
-    query_false :- query(C,D,Operator,Alpha), Operator = ">=";
+    witness :- query(C,D,Operator,Alpha), Operator = ">=";
        typical_element(C,X), eval(impl(C,D),X,V), @ge(V,max_value, Alpha) != 1.
-    query_false :- query(C,D,Operator,Alpha), Operator = ">";
+    witness :- query(C,D,Operator,Alpha), Operator = ">";
        typical_element(C,X), eval(impl(C,D),X,V), @gt(V,max_value, Alpha) != 1.
     
     % if the query is <= or <, search for a counterexample making the query true
-    query_true :- query(C,D,Operator,Alpha), Operator = "<=";
+    witness :- query(C,D,Operator,Alpha), Operator = "<=";
        typical_element(C,X), eval(impl(C,D),X,V), @le(V,max_value, Alpha) = 1.
-    query_true :- query(C,D,Operator,Alpha), Operator = "<";
+    witness :- query(C,D,Operator,Alpha), Operator = "<";
        typical_element(C,X), eval(impl(C,D),X,V), @lt(V,max_value, Alpha) = 1.
            
-    witness :- query_true. 
-    witness :- query_false. 
     :~ witness. [-1@1] 
 % query witness : end
 
@@ -280,12 +285,7 @@ eval(impl(A,B),X, @implication(V1,V2, max_value))
 #show.
 #show eval(C,X,V) : eval(C,X,V), concept(C), @is_named_concept(C) = 1.
 #show typical(V) : typical_element(C,X), eval(C,X,V).
-#show query_true: query_true.
-#show query_true: query(C,D,Operator,Alpha), Operator = ">=", not query_false.
-#show query_true: query(C,D,Operator,Alpha), Operator = ">", not query_false.
-#show query_false: query_false.
-#show query_false: query(C,D,Operator,Alpha), Operator = "<=", not query_true.
-#show query_false: query(C,D,Operator,Alpha), Operator = "<", not query_true.
+#show witness/0.
 
 
 
