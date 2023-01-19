@@ -1,11 +1,11 @@
 import dataclasses
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Dict
 
 import typer
-from dumbo_utils.validation import validate
 from dumbo_utils.console import console
+from dumbo_utils.validation import validate
 from rich.table import Table
 
 from valphi.controllers import Controller
@@ -16,6 +16,12 @@ from valphi.networks import NetworkTopology, ArgumentationGraph, MaxSAT, Network
 class AppOptions:
     controller: Optional[Controller] = dataclasses.field(default=None)
     debug: bool = dataclasses.field(default=False)
+
+
+class ShowSolutionOption(str, Enum):
+    IF_WITNESS = "if-witness"
+    ALWAYS = "always"
+    NEVER = "never"
 
 
 app_options = AppOptions()
@@ -107,9 +113,9 @@ def main(
     )
 
 
-def network_values_to_table(values: Dict) -> Table:
+def network_values_to_table(values: Dict, *, title: str = "") -> Table:
     network = app_options.controller.network
-    table = Table()
+    table = Table(title=title)
     if type(network) is NetworkTopology:
         table.add_column("Layer")
         max_nodes = 0
@@ -184,10 +190,11 @@ def command_query(
             "-q",
             help=f"File containing the query (as an alternative to providing the query from the command line)",
         ),
-        show_solution: Optional[bool] = typer.Option(
-            None,
+        show_solution: ShowSolutionOption = typer.Option(
+            ShowSolutionOption.IF_WITNESS,
             "--show-solution",
             "-s",
+            case_sensitive=False,
             help="Enforce or inhibit the printing of the computed solution",
         ),
 ) -> None:
@@ -209,6 +216,6 @@ def command_query(
     title = f"{str(res.true).upper()}: typical individuals of the left concept are assigned {res.left_concept_value}" \
         if res.consistent_knowledge_base else f"TRUE: the knowledge base is inconsistent!"
     console.print(title)
-    if show_solution is True or (show_solution is None and res.witness):
+    if show_solution == ShowSolutionOption.ALWAYS or (show_solution == ShowSolutionOption.IF_WITNESS and res.witness):
         console.print(network_values_to_table(res.assignment))
 
