@@ -1,4 +1,5 @@
 import dataclasses
+from enum import Enum, auto
 from pathlib import Path
 from typing import List, Optional, Dict
 
@@ -106,9 +107,9 @@ def main(
     )
 
 
-def network_values_to_table(values: Dict, *, title: str = "") -> Table:
+def network_values_to_table(values: Dict) -> Table:
     network = app_options.controller.network
-    table = Table(title=title)
+    table = Table()
     if type(network) is NetworkTopology:
         table.add_column("Layer")
         max_nodes = 0
@@ -183,6 +184,12 @@ def command_query(
             "-q",
             help=f"File containing the query (as an alternative to providing the query from the command line)",
         ),
+        show_solution: Optional[bool] = typer.Option(
+            None,
+            "--show-solution",
+            "-s",
+            help="Enforce or inhibit the printing of the computed solution",
+        ),
 ) -> None:
     """
     Answer the provided query.
@@ -201,4 +208,7 @@ def command_query(
         res = app_options.controller.answer_query(query=query)
     title = f"{str(res.true).upper()}: typical individuals of the left concept are assigned {res.left_concept_value}" \
         if res.consistent_knowledge_base else f"TRUE: the knowledge base is inconsistent!"
-    console.print(network_values_to_table(res.assignment, title=title))
+    console.print(title)
+    if show_solution is True or (show_solution is None and res.witness):
+        console.print(network_values_to_table(res.assignment))
+

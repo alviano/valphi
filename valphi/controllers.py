@@ -1,5 +1,6 @@
 import dataclasses
 from dataclasses import InitVar
+from enum import Enum, auto
 from typing import List, Optional, Final
 
 import clingo
@@ -31,6 +32,7 @@ class Controller:
         consistent_knowledge_base: bool
         left_concept_value: Optional[float]
         assignment: frozendict = dataclasses.field(default_factory=frozendict)
+        witness: bool = dataclasses.field(default=False)
 
         __key = PrivateKey()
 
@@ -42,23 +44,25 @@ class Controller:
             return not self.true
 
         @staticmethod
-        def of_true(left_concept_value: float, assignment: frozendict) -> 'Controller.QueryResult':
+        def of_true(left_concept_value: float, assignment: frozendict, witness: bool) -> 'Controller.QueryResult':
             return Controller.QueryResult(
                 key=Controller.QueryResult.__key,
                 true=True,
                 consistent_knowledge_base=True,
                 left_concept_value=left_concept_value,
                 assignment=assignment,
+                witness=witness,
             )
 
         @staticmethod
-        def of_false(left_concept_value: float, assignment: frozendict) -> 'Controller.QueryResult':
+        def of_false(left_concept_value: float, assignment: frozendict, witness: bool) -> 'Controller.QueryResult':
             return Controller.QueryResult(
                 key=Controller.QueryResult.__key,
                 true=False,
                 consistent_knowledge_base=True,
                 left_concept_value=left_concept_value,
                 assignment=assignment,
+                witness=witness,
             )
 
         @staticmethod
@@ -164,6 +168,7 @@ class Controller:
         return factory_method(
             left_concept_value=left_concept_value / self.max_value,
             assignment=eval_values,
+            witness=witness,
         )
 
     def __generate_wc(self):
