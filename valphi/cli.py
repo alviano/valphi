@@ -117,20 +117,19 @@ def network_values_to_table(values: Dict, *, title: str = "") -> Table:
     network = app_options.controller.network
     table = Table(title=title)
     if type(network) is NetworkTopology:
-        table.add_column("Layer")
+        table.add_column("Node")
         max_nodes = 0
         for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
+            table.add_column(f"Layer {layer_index}")
             nodes = network.number_of_nodes(layer=layer_index)
             max_nodes = max(nodes, max_nodes)
-        for node_index, _ in enumerate(range(max_nodes), start=1):
-            table.add_column(f"Node {node_index}")
 
-        for layer_index, _ in enumerate(range(network.number_of_layers()), start=1):
-            nodes = network.number_of_nodes(layer=layer_index)
+        for node_index, _ in enumerate(range(max_nodes), start=1):
             table.add_row(
-                str(layer_index),
+                str(node_index),
                 *(str(values[(layer_index, node_index)] / app_options.controller.max_value)
-                  for node_index, _ in enumerate(range(nodes), start=1))
+                  if node_index <= network.number_of_nodes(layer_index) else None
+                  for layer_index, _ in enumerate(range(network.number_of_layers()), start=1))
             )
     elif type(network) is ArgumentationGraph:
         table.add_column("Node")
