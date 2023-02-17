@@ -5,26 +5,33 @@ A system for defeasible reasoning over weighted knowledge bases.
 
 # Prerequisites
 
-- Updated [conda](https://docs.conda.io/en/latest/)
+- Python 3.10+
 
 
 # Install
 
-Create a conda environment by running
+Via pip:
 ```bash
-$ ./bin/create-environment.sh
+$ pip install valphi
 ```
-It will use the name `valphi` by default, but a different name can be specified when asked.
 
-Activate the conda environment and install dependencies with `poetry`:
+Alternative, clone the repository and use poetry:
 ```bash
-$ conda activate valphi
-(valphi) $ poetry install
+$ poetry install
 ```
-Note that `poetry` is the one in the conda environment, not your local installation of `poetry`.
 
 
 # Usage
+
+Run the CLI with either
+```bash
+$ python -m valphi
+```
+or
+```bash
+(valphi) $ ./valphi_cli.py
+```
+followed by the required arguments.
 
 To find all solutions of a multi-layer network, for example the one in `examples/kbmonk1.network`, run
 ```bash
