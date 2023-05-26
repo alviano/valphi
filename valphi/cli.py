@@ -1,10 +1,12 @@
 import dataclasses
+import webbrowser
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Dict
 
 import typer
 from dumbo_utils.console import console
+from dumbo_utils.url import compress_object_for_url
 from dumbo_utils.validation import validate
 from rich.table import Table
 
@@ -163,6 +165,10 @@ def command_solve(
             "-s",
             help="Maximum number of solutions to compute (0 for unbounded)",
         ),
+        show_in_asp_chef: bool = typer.Option(
+            default=False,
+            help="Open solutions with ASP Chef",
+        ),
 ) -> None:
     """
     Run the program and print solutions.
@@ -175,6 +181,15 @@ def command_solve(
         console.print('NO SOLUTIONS')
     for index, values in enumerate(res, start=1):
         console.print(network_values_to_table(values, title=f"Solution {index}"))
+    if show_in_asp_chef:
+        for index, values in enumerate(res, start=1):
+            url = "https://asp-chef.alviano.net/open#"
+            # url = "http://localhost:5188/open#"
+            graph = app_options.controller.network.network_facts.filter(when=lambda atom: atom.predicate_name == "attack").as_facts
+            evaluation = '\n'.join(f"eval({node},{','.join(value.split('/'))})." for node, value in values.items())
+            url += compress_object_for_url({"input": graph + '\n' + evaluation}, suffix="")
+            url += ";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%21"
+            webbrowser.open(url, new=0, autoraise=True)
 
 
 @app.command(name="query")

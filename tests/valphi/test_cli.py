@@ -1,3 +1,4 @@
+import clingo
 import pytest
 from click import UsageError
 from typer.testing import CliRunner
@@ -26,3 +27,9 @@ def test_solve_feedforward_network_topology(runner):
     ])
     assert result.exit_code == 0
     assert "Solution 10" in result.stdout
+
+
+def test_foo():
+    print(clingo.Number(1).type)
+    print(clingo.String("-10").string[0])
+    assert False
