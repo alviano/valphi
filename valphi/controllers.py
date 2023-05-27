@@ -21,7 +21,7 @@ class Controller:
     network: NetworkInterface
     val_phi: List[float] = dataclasses.field(default_factory=lambda: Controller.default_val_phi())
     raw_code: str = dataclasses.field(default="")
-    use_wc: bool = dataclasses.field(default=False)
+    use_wc: Optional[int] = dataclasses.field(default=None)
     use_ordered_encoding: bool = dataclasses.field(default=False)
 
     @typeguard.typechecked
@@ -77,20 +77,24 @@ class Controller:
     def __post_init__(self):
         validate("max_value", self.max_value, min_value=1, max_value=1000)
         validate("val_phi", self.val_phi, equals=sorted(self.val_phi))
-        validate("val-phi must be integer", all(type(value) is int or value.is_integer() for value in self.val_phi),
-                 equals=True, help_msg="Weight-constraints requires an integer val-phi")
+        if self.use_wc is not None:
+            validate("use_wc", self.use_wc, min_value=1, max_value=1_000_000)
+        # if self.use_wc:
+        #     validate("val-phi must be integer", all(type(value) is int or value.is_integer() for value in self.val_phi),
+        #              equals=True, help_msg="Weight-constraints requires an integer val-phi")
         if type(self.network) is MaxSAT:
             validate("", self.val_phi, equals=self.network.val_phi)
 
     @staticmethod
     def default_val_phi() -> List[float]:
-        return [-10987, -4237, 0, 4236, 10986]
+        return [-10.987, -4.237, 0, 4.236, 10.986]
 
     @property
     def max_value(self) -> int:
         return len(self.val_phi)
 
     def __setup_control(self, query: Optional[str] = None):
+        network = self.network if self.use_wc is None else self.network.approximate(self.use_wc)
         # control = clingo.Control(["--opt-strategy=usc,k,4", "--opt-usc-shrink=rgs"] if query else [])
         control = clingo.Control()
         # control.configuration.solve.models = self.max_stable_models if query is None else 0
@@ -98,7 +102,7 @@ class Controller:
                     + (QUERY_ENCODING if query and not self.use_ordered_encoding else "")
                     + (QUERY_ORDERED_ENCODING if query and self.use_ordered_encoding else "")
                     + (ORDERED_ENCODING if self.use_ordered_encoding else "")
-                    + self.network.network_facts.as_facts
+                    + network.network_facts.as_facts
                     + self.raw_code + ("" if query is None else f"query({query})."))
         control.ground([("base", [Number(self.max_value)])], context=Context())
         if self.use_wc:
@@ -106,7 +110,7 @@ class Controller:
             control.add("base", ["max_value"], '\n'.join(constraints))
             control.ground([("base", [Number(self.max_value)])], context=Context())
         else:
-            self.network.register_propagators(control, self.val_phi)
+            network.register_propagators(control, self.val_phi)
         return control
 
     def __read_eval(self, model) -> frozendict:
@@ -144,7 +148,7 @@ class Controller:
         control.solve(on_model=model_collect)
         return [self.__read_eval(model) for model in model_collect]
 
-    def answer_query(self, query: str) -> QueryResult:
+    def answer_query(self, query: str) -> "Controller.QueryResult":
         if type(self.network) is MaxSAT:
             validate("query", query, equals="even")
             query = self.network.query
@@ -172,10 +176,11 @@ class Controller:
         )
 
     def __generate_wc(self):
-        res = [f"val_phi(0,#inf,{int(self.val_phi[0])})."]
-        for value in range(len(self.val_phi) - 1):
-            res.append(f"val_phi({value + 1},{int(self.val_phi[value])},{int(self.val_phi[value + 1])}).")
-        res.append(f"val_phi({len(self.val_phi)},{int(self.val_phi[-1])},#sup).")
+        val_phi = [round(value * self.use_wc) for value in self.val_phi]
+        res = [f"val_phi(0,#inf,{int(val_phi[0])})."]
+        for value in range(len(val_phi) - 1):
+            res.append(f"val_phi({value + 1},{int(val_phi[value])},{int(val_phi[value + 1])}).")
+        res.append(f"val_phi({len(val_phi)},{int(val_phi[-1])},#sup).")
         if self.use_ordered_encoding:
             res.append(WC_ORDERED_ENCODING)
         else:

@@ -64,7 +64,11 @@ def main(
             "-f",
             help="One or more files to parse",
         ),
-        weight_constraints: bool = typer.Option(False, help="Use weight constraints instead of ad-hoc propagator"),
+        weight_constraints: Optional[int] = typer.Option(
+            None,
+            help="Use weight constraints instead of ad-hoc propagator. "
+                 "It also requires a multiplier to approximate real numbers."
+        ),
         ordered: bool = typer.Option(False, help="Add ordered encoding for eval/3"),
         debug: bool = typer.Option(False, "--debug", help="Show stacktrace and debug info"),
 ):
@@ -182,14 +186,17 @@ def command_solve(
     for index, values in enumerate(res, start=1):
         console.print(network_values_to_table(values, title=f"Solution {index}"))
     if show_in_asp_chef:
-        for index, values in enumerate(res, start=1):
-            url = "https://asp-chef.alviano.net/open#"
-            # url = "http://localhost:5188/open#"
-            graph = app_options.controller.network.network_facts.filter(when=lambda atom: atom.predicate_name == "attack").as_facts
-            evaluation = '\n'.join(f"eval({node},{','.join(value.split('/'))})." for node, value in values.items())
-            url += compress_object_for_url({"input": graph + '\n' + evaluation}, suffix="")
-            url += ";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%21"
-            webbrowser.open(url, new=0, autoraise=True)
+        url = "https://asp-chef.alviano.net/open#"
+        # url = "http://localhost:5188/open#"
+        graph = app_options.controller.network.network_facts.filter(when=lambda atom: atom.predicate_name == "attack").as_facts
+        models = []
+        for values in res:
+            models.append(graph)
+            models.append('\n'.join(f"eval({node},{','.join(value.split('/'))})." for node, value in values.items()))
+            models.append('§')
+        url += compress_object_for_url({"input": '\n'.join(models[:-1])}, suffix="")
+        url += ";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%21"
+        webbrowser.open(url, new=0, autoraise=True)
 
 
 @app.command(name="query")

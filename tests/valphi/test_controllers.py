@@ -53,7 +53,7 @@ def test_network_topology_output(two_layers_three_nodes_network):
 
 
 def test_use_wc(two_layers_three_nodes_network):
-    controller = Controller(network=two_layers_three_nodes_network, use_wc=True)
+    controller = Controller(network=two_layers_three_nodes_network, use_wc=1_000)
     models = controller.find_solutions()
     assert len(models) == 2
     for model in models:
@@ -61,20 +61,20 @@ def test_use_wc(two_layers_three_nodes_network):
 
 
 def check_all_options(network):
-    simple = Controller(network=network, use_wc=False, use_ordered_encoding=False).find_solutions()
-    wc = Controller(network=network, use_wc=True, use_ordered_encoding=False).find_solutions()
-    ordered = Controller(network=network, use_wc=False, use_ordered_encoding=True).find_solutions()
-    wc_ordered = Controller(network=network, use_wc=True, use_ordered_encoding=True).find_solutions()
+    simple = Controller(network=network, use_wc=None, use_ordered_encoding=False).find_solutions()
+    wc = Controller(network=network, use_wc=1_000, use_ordered_encoding=False).find_solutions()
+    ordered = Controller(network=network, use_wc=None, use_ordered_encoding=True).find_solutions()
+    wc_ordered = Controller(network=network, use_wc=1_000, use_ordered_encoding=True).find_solutions()
     assert set(str(x) for x in simple) == set(str(x) for x in wc)
     assert set(str(x) for x in simple) == set(str(x) for x in ordered)
     assert set(str(x) for x in simple) == set(str(x) for x in wc_ordered)
 
 
 def check_all_options_for_query(network, query):
-    simple = Controller(network=network, use_wc=False, use_ordered_encoding=False).answer_query(query)
-    wc = Controller(network=network, use_wc=True, use_ordered_encoding=False).answer_query(query)
-    ordered = Controller(network=network, use_wc=False, use_ordered_encoding=True).answer_query(query)
-    wc_ordered = Controller(network=network, use_wc=True, use_ordered_encoding=True).answer_query(query)
+    simple = Controller(network=network, use_wc=None, use_ordered_encoding=False).answer_query(query)
+    wc = Controller(network=network, use_wc=1_000, use_ordered_encoding=False).answer_query(query)
+    ordered = Controller(network=network, use_wc=None, use_ordered_encoding=True).answer_query(query)
+    wc_ordered = Controller(network=network, use_wc=1_000, use_ordered_encoding=True).answer_query(query)
     assert simple.true == wc.true
     assert simple.true == ordered.true
     assert simple.true == wc_ordered.true
@@ -82,16 +82,16 @@ def check_all_options_for_query(network, query):
 
 def check_all_options_for_max_sat(network, even, only_wc: bool = True):
     if not only_wc:
-        simple = Controller(network=network, use_wc=False, use_ordered_encoding=False, val_phi=network.val_phi)\
+        simple = Controller(network=network, use_wc=None, use_ordered_encoding=False, val_phi=network.val_phi)\
             .answer_query("even")
-        ordered = Controller(network=network, use_wc=False, use_ordered_encoding=True, val_phi=network.val_phi)\
+        ordered = Controller(network=network, use_wc=None, use_ordered_encoding=True, val_phi=network.val_phi)\
             .answer_query("even")
         assert simple.true == even
         assert ordered.true == even
 
-    wc = Controller(network=network, use_wc=True, use_ordered_encoding=False, val_phi=network.val_phi)\
+    wc = Controller(network=network, use_wc=None, use_ordered_encoding=False, val_phi=network.val_phi)\
         .answer_query("even")
-    wc_ordered = Controller(network=network, use_wc=True, use_ordered_encoding=True,
+    wc_ordered = Controller(network=network, use_wc=None, use_ordered_encoding=True,
                             val_phi=network.val_phi).answer_query("even")
     assert wc.true == even
     assert wc_ordered.true == even
@@ -192,7 +192,7 @@ def test_max_sat_even(instance):
 def test_individuals():
     res = Controller(
         network=EmptyNetwork(),
-        use_wc=True,
+        use_wc=1_000,
         use_ordered_encoding=True,
         raw_code="""
             assertion(c,a,"=","1.0").
@@ -203,7 +203,7 @@ def test_individuals():
     assert not res.true
     res = Controller(
         network=EmptyNetwork(),
-        use_wc=True,
+        use_wc=1_000,
         use_ordered_encoding=True,
         raw_code="""
             assertion(c,a,"=","1.0").
@@ -214,19 +214,10 @@ def test_individuals():
     assert res.true
 
 
-def test_weight_constraints_requires_integer_val_phi():
-    with pytest.raises(ValueError):
-        Controller(
-            network=EmptyNetwork(),
-            use_wc=True,
-            val_phi=[0, 0.5, 1],
-        )
-
-
 def test_knowledge_base_can_be_inconsistent():
     res = Controller(
         network=EmptyNetwork(),
-        use_wc=True,
+        use_wc=1_000,
         use_ordered_encoding=False,
         raw_code="""
                 concept_inclusion(top,c,">=","1.0").
@@ -239,7 +230,7 @@ def test_knowledge_base_can_be_inconsistent():
 def test_concept_inclusion_with_individuals():
     res = Controller(
         network=EmptyNetwork(),
-        use_wc=True,
+        use_wc=1_000,
         use_ordered_encoding=False,
         raw_code="""
             assertion(c,a,">=","1").
@@ -253,7 +244,7 @@ def test_concept_inclusion_with_individuals():
 def test_concept_inclusions_with_less_than():
     res = Controller(
         network=EmptyNetwork(),
-        use_wc=True,
+        use_wc=1_000,
         use_ordered_encoding=False,
         raw_code="""
             concept_inclusion(top, or(a,b), ">=", "1").
@@ -267,7 +258,7 @@ def test_concept_inclusions_with_less_than():
 def test_concept_inclusions_with_less_than_or_equal():
     res = Controller(
         network=EmptyNetwork(),
-        use_wc=True,
+        use_wc=1_000,
         use_ordered_encoding=False,
         raw_code="""
             concept_inclusion(top, or(a,b), ">=", "1").
@@ -281,7 +272,7 @@ def test_concept_inclusions_with_less_than_or_equal():
 def test_query_with_less_than_or_equal():
     res = Controller(
         network=EmptyNetwork(),
-        use_wc=True,
+        use_wc=1_000,
         use_ordered_encoding=False,
         raw_code="""
             concept_inclusion(a, bot, ">=", "1").

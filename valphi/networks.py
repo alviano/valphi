@@ -1,4 +1,5 @@
 import dataclasses
+from copy import deepcopy
 from typing import List, Tuple, Optional, Union, Any, Set, FrozenSet
 
 import clingo
@@ -20,9 +21,9 @@ class NetworkInterface:
     @staticmethod
     def parse(s: Union[str, List[str]]) -> 'NetworkInterface':
         if type(s) == str:
-            lines = [x.strip() for x in s.strip().split('\n')]
+            lines = [x.strip().replace('\t', ' ') for x in s.strip().split('\n')]
         else:
-            lines = [x.strip() for x in s]
+            lines = [x.strip().replace('\t', ' ') for x in s]
         res = MaxSAT.parse_implementation(lines, NetworkInterface.__parse_key)
         if res is None:
             res = ArgumentationGraph.parse_implementation(lines, NetworkInterface.__parse_key)
@@ -64,6 +65,13 @@ class NetworkInterface:
     def val_phi(self):
         raise NotImplemented
 
+    def approximate(self, multiplier: int) -> "NetworkInterface":
+        validate("multiplier", multiplier, min_value=1, max_value=1_000_000)
+        return self._approximate(multiplier)
+
+    def _approximate(self, multiplier: int) -> "NetworkInterface":
+        raise NotImplemented
+
 
 @typeguard.typechecked
 @dataclasses.dataclass(frozen=True)
@@ -76,6 +84,9 @@ class EmptyNetwork(NetworkInterface):
 
     def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
         pass
+
+    def _approximate(self, multiplier: int) -> "NetworkInterface":
+        return self
 
 
 @typeguard.typechecked
@@ -204,6 +215,19 @@ class NetworkTopology(NetworkInterface):
                 propagator = ValPhiPropagator(self.term(layer_index, node_index), val_phi=val_phi)
                 control.register_propagator(propagator)
 
+    def _approximate(self, multiplier: int) -> "NetworkInterface":
+        res = NetworkTopology()
+        res.__layers.extend(
+            [
+                [round(weight * multiplier) for weight in node]
+                for node in layer
+            ]
+            for layer in self.__layers
+        )
+        res.__exactly_one.extend(deepcopy(self.__exactly_one))
+        res.__crisp_layers.update(self.__crisp_layers)
+        return res.complete()
+
 
 @typeguard.typechecked
 @dataclasses.dataclass(frozen=True)
@@ -264,6 +288,13 @@ class ArgumentationGraph(NetworkInterface):
     def _register_propagators(self, control: clingo.Control, val_phi: List[float]) -> None:
         for attacked in self.attacked:
             control.register_propagator(ValPhiPropagator(self.term(attacked), val_phi=val_phi))
+
+    def _approximate(self, multiplier: int) -> "ArgumentationGraph":
+        res = ArgumentationGraph()
+        res.__attacks.update(
+            (value[0], value[1], round(value[2] * multiplier)) for value in self.__attacks
+        )
+        return res.complete()
 
 
 @typeguard.typechecked
@@ -378,3 +409,6 @@ weighted_typicality_inclusion(even(I+1),even''(I+1),{max_value}) :- I = 0..{max_
         """)
         for node in output_nodes:
             control.register_propagator(ValPhiPropagator(str(node), val_phi=val_phi))
+
+    def _approximate(self, multiplier: int) -> "NetworkInterface":
+        return self

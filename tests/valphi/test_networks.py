@@ -103,3 +103,19 @@ p cnf 0 0
     """.strip())
     assert max_sat.number_of_clauses == 3
     assert max_sat.val_phi == [0, 3, 6]
+
+
+def test_approximation():
+    network = NetworkInterface.parse("""
+0.55 -0.51 1.0
+=1 1 2
+    """.strip())
+    network = network.approximate(10)
+    assert network.network_facts.as_facts == """
+exactly_one(0).
+exactly_one_element(0,l1_1).
+exactly_one_element(0,l1_2).
+weighted_typicality_inclusion(l2_1,l1_1,"-5").
+weighted_typicality_inclusion(l2_1,l1_2,"10").
+weighted_typicality_inclusion(l2_1,top,"6").
+    """.strip()
