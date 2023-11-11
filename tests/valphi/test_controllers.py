@@ -49,7 +49,7 @@ def test_network_topology_output(two_layers_three_nodes_network):
     models = controller.find_solutions()
     assert len(models) == 2
     for model in models:
-        assert model[(1, 1)] + model[(1, 2)] == controller.max_value
+        assert int(model[(1, 1)].split('/')[0]) + int(model[(1, 2)].split('/')[0]) == controller.max_value
 
 
 def test_use_wc(two_layers_three_nodes_network):
@@ -57,7 +57,7 @@ def test_use_wc(two_layers_three_nodes_network):
     models = controller.find_solutions()
     assert len(models) == 2
     for model in models:
-        assert model[(1, 1)] + model[(1, 2)] == controller.max_value
+        assert int(model[(1, 1)].split('/')[0]) + int(model[(1, 2)].split('/')[0]) == controller.max_value
 
 
 def check_all_options(network):

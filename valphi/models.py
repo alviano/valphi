@@ -2,7 +2,7 @@ import dataclasses
 from typing import List, Iterable
 
 import typeguard
-from dumbo_asp.primitives import Model
+from dumbo_asp.primitives.models import Model
 from dumbo_utils.validation import validate
 
 

@@ -3,12 +3,12 @@
 A system for defeasible reasoning over weighted knowledge bases.
 
 
-# Prerequisites
+## Prerequisites
 
 - Python 3.10+
 
 
-# Install
+## Install
 
 Via pip:
 ```bash
@@ -21,7 +21,7 @@ $ poetry install
 ```
 
 
-# Usage
+## Usage
 
 Run the CLI with either
 ```bash
@@ -51,7 +51,7 @@ A description of the available options is given by
 ```
 
 
-# Multi-Layer (Fully-Connected) Network format
+## Multi-Layer (Fully-Connected) Network format
 
 The input layer is implicit.
 Each one of the other layers is encoded by a sequence of lines terminated by a line containing `#`.
@@ -70,7 +70,7 @@ Exactly-one constraints on the nodes of the input layer (layer 1) can be specifi
 where each `NODE-INDEX` is the index of a node in the input layer, again indexed starting by 1.
 
 
-# Graph format
+## Graph format
 
 The first line is
 ```
@@ -80,7 +80,7 @@ The first line is
 The other lines have three integers encoding a weighted link of the graph.
 
 
-# DIMACS format
+## DIMACS format
 
 `valphi` can solve the MAXSAT problem for CNF formulas encoded in the DIMACS format, but don't expect it to be competitive with MAXSAT solvers.
 In fact, in this context the solving approach of `valphi` is not optimized, and a simple reduction (or compilation) of the problem is adopted.

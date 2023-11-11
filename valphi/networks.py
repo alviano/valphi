@@ -72,6 +72,13 @@ class NetworkInterface:
     def _approximate(self, multiplier: int) -> "NetworkInterface":
         raise NotImplemented
 
+    def as_attack_graph(self) -> Model:
+        self.validate_is_complete()
+        return self._as_attack_graph()
+
+    def _as_attack_graph(self) -> Model:
+        raise NotImplemented
+
 
 @typeguard.typechecked
 @dataclasses.dataclass(frozen=True)
@@ -87,6 +94,9 @@ class EmptyNetwork(NetworkInterface):
 
     def _approximate(self, multiplier: int) -> "NetworkInterface":
         return self
+
+    def _as_attack_graph(self) -> Model:
+        return Model.empty()
 
 
 @typeguard.typechecked
@@ -228,6 +238,21 @@ class NetworkTopology(NetworkInterface):
         res.__crisp_layers.update(self.__crisp_layers)
         return res.complete()
 
+    def _as_attack_graph(self) -> Model:
+        res = []
+        for layer_index, _ in enumerate(range(self.number_of_layers()), start=1):
+            for node_index, _ in enumerate(range(self.number_of_nodes(layer=layer_index)), start=1):
+                weights = self.in_weights(layer=layer_index, node=node_index)
+                term = self.term(layer_index, node_index)
+                res.append(f"layer({term},{layer_index}).")
+                res.append(f"index({term},{node_index}).")
+                if weights:
+                    res.append(f"attack({term},top,\"{weights[0]}\").")
+                    for weight_index, weight in enumerate(weights[1:], start=1):
+                        res.append(
+                            f"attack({term},{self.term(layer_index - 1, weight_index)},\"{weight}\").")
+        return Model.of_program(res)
+
 
 @typeguard.typechecked
 @dataclasses.dataclass(frozen=True)
@@ -295,6 +320,9 @@ class ArgumentationGraph(NetworkInterface):
             (value[0], value[1], round(value[2] * multiplier)) for value in self.__attacks
         )
         return res.complete()
+
+    def _as_attack_graph(self) -> Model:
+        return self.network_facts.filter(when=lambda atom: atom.predicate_name == "attack")
 
 
 @typeguard.typechecked

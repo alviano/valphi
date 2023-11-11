@@ -122,7 +122,7 @@ class Controller:
                     continue
                 if type(self.network) is NetworkTopology:
                     layer, node = concept.name[1:].split('_', maxsplit=1)
-                    res[(int(layer), int(node))] = value.number
+                    res[(int(layer), int(node))] = f"{value.number}/{self.max_value}"
                 elif type(self.network) is ArgumentationGraph:
                     validate("format", concept.name, custom=[pattern(r"a[0-9]+")],
                              help_msg="The format of the argument is wrong")
