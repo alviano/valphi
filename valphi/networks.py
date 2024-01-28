@@ -261,6 +261,13 @@ class ArgumentationGraph(NetworkInterface):
 
     @staticmethod
     def parse_implementation(lines: List[str], key: Any) -> Optional['ArgumentationGraph']:
+        def convert(s):
+            try:
+                return float(s)
+            except ValueError:
+                num, den = s.split('/')
+                return float(num) / float(den)
+
         NetworkInterface.validate_parse_key(key)
         res = ArgumentationGraph()
         state = "init"
@@ -274,7 +281,7 @@ class ArgumentationGraph(NetworkInterface):
                 continue
             if state == "attacks":
                 attacker, attacked, weight = line.split()
-                res.add_attack(int(attacker), int(attacked), float(weight))
+                res.add_attack(int(attacker), int(attacked), convert(weight))
         return res.complete()
 
     def add_attack(self, attacker: int, attacked: int, weight: float) -> 'ArgumentationGraph':

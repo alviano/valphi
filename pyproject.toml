@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "valphi"
-version = "0.5.0"
+version = "0.5.1"
 description = "Logic programs ralying on ValPhi semantics"
 authors = ["Mario Alviano <mario.alviano@gmail.com>"]
 
